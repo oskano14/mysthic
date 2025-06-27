@@ -1,36 +1,98 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# 🔮 Mysthic Tarot
 
-## Getting Started
+**Mysthic Tarot** est une application de tirage divinatoire interactif. Elle permet à l'utilisateur de tirer trois cartes de tarot (passé, présent, futur) et d'obtenir une interprétation générée automatiquement par une intelligence artificielle.
 
-First, run the development server:
+---
+
+## 🚀 Installation & Lancement du projet
+
+### 1. Cloner le dépôt
+
+```bash
+git clone https://github.com/oskano14/mysthic.git
+cd mysthic
+```
+
+### 2. Installer les dépendances
+
+```bash
+npm install
+```
+
+### 3. Lancer le serveur de développement
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Le site sera accessible à l’adresse : [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+> ✅ **Compatibilité :** ce projet est compatible Windows / macOS / Linux.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## 🧰 Intégration de Mistral AI
 
-To learn more about Next.js, take a look at the following resources:
+L'application utilise **Mistral AI** pour générer une interprétation personnalisée des cartes tirées.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Comment ça fonctionne ?
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Les 3 cartes tirées sont envoyées via une requête `POST` à une API locale (`/api/interpretation`).
+- Le backend appelle Mistral via un `fetch()` avec une `prompt` structurée.
+- Le résultat est affiché dans l'interface sous chaque carte.
 
-## Deploy on Vercel
+### Configuration
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Le code d'appel à Mistral est dans `pages/api/interpretation.js`
+- Ajoutez votre clé API Mistral dans un fichier `.env.local` :
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+MISTRAL_API_KEY=your_mistral_key_here
+```
+
+> ⚠️ N'oubliez pas de relancer le serveur si vous modifiez `.env.local`
+
+---
+
+## 🎮 Contrôles & Fonctionnalités
+
+- 🕵️‍♂️ L'utilisateur clique pour tirer 3 cartes.
+- ✨ Les cartes sont révélées une par une avec une animation.
+- 🔮 Une interprétation IA est générée pour chaque carte.
+- 🎷 Une ambiance sonore peut être activée.
+- 📱 Responsive : s’adapte au mobile et desktop.
+
+---
+
+## 🎨 Technologies utilisées
+
+- **React / Next.js**
+- **TailwindCSS**
+- **Framer Motion**
+- **Lucide Icons**
+- **Mistral API**
+
+---
+
+## ❓ En cas de problème
+
+- Assurez-vous que le port 3000 est libre.
+- Pour réinitialiser l’environnement :
+
+```bash
+rm -rf node_modules
+npm install
+```
+
+Sur Windows :
+
+```bash
+rmdir /s /q node_modules
+npm install
+```
+
+---
+
+## 🧙‍♂️ Auteur
+
+Projet développé par [oskano14](https://github.com/oskano14)
