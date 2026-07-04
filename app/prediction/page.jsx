@@ -10,6 +10,7 @@ import {
   Music,
   Sparkles,
   Volume2,
+  VolumeX,
   Star,
 } from "lucide-react";
 import { tarotCards } from "@/data/tarotCards"; // si besoin
@@ -23,6 +24,7 @@ export default function Prediction() {
   const [isLoadingPrediction, setIsLoadingPrediction] = useState(true);
   const [isLoadingMusic, setIsLoadingMusic] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(30);
   const audioRef = useRef(null);
@@ -48,75 +50,94 @@ export default function Prediction() {
 
   const generatePrediction = async () => {
     setIsLoadingPrediction(true);
-    const apiKey = process.env.NEXT_PUBLIC_MISTRAL_API_KEY;
-
-    const prompt = `Tu es une oracle ancienne, mystique et bienveillante.
-Voici trois cartes de tarot tirées par une âme en quête de réponses :
-- Passé : ${selectedCards[0]?.name} (${selectedCards[0]?.meaning})
-- Présent : ${selectedCards[1]?.name} (${selectedCards[1]?.meaning})
-- Futur : ${selectedCards[2]?.name} (${selectedCards[2]?.meaning})
-
-Fais une interprétation sacrée et profonde, **centrée sur le thème : ${theme}**.
-Utilise un style poétique, ésotérique et intuitif. Réponds uniquement en **français**.`;
+    let interpretationText = "";
 
     try {
-      const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+      const res = await fetch("/api/prediction", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "mistral-small",
-          temperature: 0.85,
-          messages: [
-            {
-              role: "system",
-              content:
-                "Tu es une oracle mystique qui parle exclusivement en français, avec un ton sacré et intuitif. Tu fais des interprétations de cartes de tarot sur différents thèmes.",
-            },
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
+          cards: selectedCards.map((c) => ({
+            name: c.name,
+            meaning: c.meaning,
+          })),
+          theme,
         }),
       });
-
       const data = await res.json();
-      setPrediction(
-        data?.choices?.[0]?.message?.content || "Erreur de réponse mystique."
-      );
+      if (!res.ok) throw new Error(data?.error || `Erreur ${res.status}`);
+
+      interpretationText = data.prediction;
+      setPrediction(interpretationText);
     } catch (err) {
       console.error("Erreur Mistral:", err);
       setPrediction("❌ Une erreur ésotérique a bloqué la prophétie.");
     }
-    /* n’oublie pas d’utiliser process.env.NEXT_PUBLIC_MISTRAL_API_KEY */
     setIsLoadingPrediction(false);
-    setTimeout(generateMusicRecommendation, 1500);
+    if (interpretationText) generateMusicRecommendation(interpretationText);
   };
-  const generateMusicRecommendation = async () => {
+
+  const generateMusicRecommendation = async (interpretationText) => {
     setIsLoadingMusic(true);
 
-    // Simulation d'un appel à l'API Spotify
-    await new Promise((resolve) => setTimeout(resolve, 2500));
+    try {
+      const res = await fetch("/api/music", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prediction: interpretationText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Erreur ${res.status}`);
 
-    const pickMusic = (interpretationText) => {
-      // 1. Boucle sur le catalogue
-      for (const track of musicCatalog) {
-        if (interpretationText.toLowerCase().includes(track.key)) {
-          return track; // 2. On retourne le premier match
-        }
-      }
-      // 3. Valeur par défaut si aucun mot-clé trouvé
-      return musicCatalog[0];
-    };
-
-    // 4. On utilise la fonction pour choisir une musique:
-    const track = pickMusic(prediction);
-    setMusicRecommendation(track);
+      setMusicRecommendation(data.track);
+    } catch (err) {
+      console.error("Erreur Spotify, repli sur le catalogue local:", err);
+      // Repli : catalogue local par mots-clés
+      const fallback =
+        musicCatalog.find((track) =>
+          interpretationText.toLowerCase().includes(track.key)
+        ) || musicCatalog[0];
+      setMusicRecommendation(fallback);
+    }
     setIsLoadingMusic(false);
   };
+
+  /* ------------------------------------------------------ */
+  /* Lecture vocale de la prédiction (speechSynthesis)       */
+  /* ------------------------------------------------------ */
+  const toggleSpeech = () => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(
+      prediction.replace(/[*#_]/g, "")
+    );
+    utterance.lang = "fr-FR";
+    const frenchVoice = window.speechSynthesis
+      .getVoices()
+      .find((voice) => voice.lang.startsWith("fr"));
+    if (frenchVoice) utterance.voice = frenchVoice;
+    utterance.rate = 0.95;
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+    setIsSpeaking(true);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -343,6 +364,30 @@ Utilise un style poétique, ésotérique et intuitif. Réponds uniquement en **f
                 <div className="text-mystique-gold/90 font-elegant leading-relaxed text-lg whitespace-pre-line">
                   {prediction}
                 </div>
+
+                {/* Lecture vocale */}
+                <motion.button
+                  onClick={toggleSpeech}
+                  className="mt-8 flex items-center space-x-3 px-6 py-3 rounded-full border border-mystique-gold/40 text-mystique-gold hover:bg-mystique-gold/10 transition-all duration-300"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  {isSpeaking ? (
+                    <>
+                      <VolumeX className="w-5 h-5" />
+                      <span className="font-elegant tracking-wide">
+                        Arrêter la lecture
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 className="w-5 h-5" />
+                      <span className="font-elegant tracking-wide">
+                        Écouter la prédiction
+                      </span>
+                    </>
+                  )}
+                </motion.button>
               </motion.div>
             )}
           </div>
@@ -422,75 +467,89 @@ Utilise un style poétique, ésotérique et intuitif. Réponds uniquement en **f
 
                     {/* Music Player */}
                     <div className="space-y-4">
-                      {/* <audio> caché, piloté par le bouton */}
-                      <audio
-                        ref={audioRef}
-                        src={
-                          musicRecommendation.previewUrl
-                        } /* 30 s mp3 ou preview_url Spotify */
-                        onTimeUpdate={(e) =>
-                          setCurrentTime(e.target.currentTime)
-                        }
-                        onLoadedMetadata={(e) =>
-                          setDuration(e.target.duration || 30)
-                        }
-                        onEnded={() => setIsPlaying(false)}
-                        preload="none"
-                      />
-                      {/* Play Button */}
-                      <div className="flex items-center space-x-4">
-                        <motion.button
-                          onClick={togglePlay}
-                          className="w-16 h-16 bg-gradient-to-r from-mystique-gold to-mystique-bronze rounded-full flex items-center justify-center text-black shadow-lg hover:shadow-2xl transition-all duration-30"
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          {isPlaying ? (
-                            <Pause className="w-8 h-8" />
-                          ) : (
-                            <Play className="w-8 h-8 ml-1" />
-                          )}
-                        </motion.button>
+                      {musicRecommendation.embedUrl ? (
+                        /* Lecteur Spotify embarqué (morceau réel) */
+                        <iframe
+                          src={musicRecommendation.embedUrl}
+                          width="100%"
+                          height="152"
+                          frameBorder="0"
+                          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                          loading="lazy"
+                          className="rounded-2xl"
+                          title="Lecteur Spotify"
+                        />
+                      ) : (
+                        <>
+                          {/* <audio> caché, piloté par le bouton (repli catalogue local) */}
+                          <audio
+                            ref={audioRef}
+                            src={musicRecommendation.previewUrl}
+                            onTimeUpdate={(e) =>
+                              setCurrentTime(e.target.currentTime)
+                            }
+                            onLoadedMetadata={(e) =>
+                              setDuration(e.target.duration || 30)
+                            }
+                            onEnded={() => setIsPlaying(false)}
+                            preload="none"
+                          />
+                          {/* Play Button */}
+                          <div className="flex items-center space-x-4">
+                            <motion.button
+                              onClick={togglePlay}
+                              className="w-16 h-16 bg-gradient-to-r from-mystique-gold to-mystique-bronze rounded-full flex items-center justify-center text-black shadow-lg hover:shadow-2xl transition-all duration-30"
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.95 }}
+                            >
+                              {isPlaying ? (
+                                <Pause className="w-8 h-8" />
+                              ) : (
+                                <Play className="w-8 h-8 ml-1" />
+                              )}
+                            </motion.button>
 
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between text-sm text-mystique-gold/60 mb-2">
-                            <span>{formatTime(currentTime)}</span>
-                            <span>{formatTime(duration)}</span>
-                          </div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between text-sm text-mystique-gold/60 mb-2">
+                                <span>{formatTime(currentTime)}</span>
+                                <span>{formatTime(duration)}</span>
+                              </div>
 
-                          {/* Progress Bar */}
-                          <div className="w-full bg-mystique-gold/20 rounded-full h-2 relative overflow-hidden">
-                            <motion.div
-                              className="h-full bg-gradient-to-r from-mystique-gold to-mystique-bronze rounded-full"
-                              style={{
-                                width: `${(currentTime / duration) * 100}%`,
-                              }}
-                              animate={
-                                isPlaying
-                                  ? {
-                                      width: ["0%", "100%"],
-                                    }
-                                  : {}
-                              }
-                              transition={
-                                isPlaying
-                                  ? {
-                                      duration: duration - currentTime,
-                                      ease: "linear",
-                                    }
-                                  : {}
-                              }
-                            />
+                              {/* Progress Bar */}
+                              <div className="w-full bg-mystique-gold/20 rounded-full h-2 relative overflow-hidden">
+                                <motion.div
+                                  className="h-full bg-gradient-to-r from-mystique-gold to-mystique-bronze rounded-full"
+                                  style={{
+                                    width: `${(currentTime / duration) * 100}%`,
+                                  }}
+                                  animate={
+                                    isPlaying
+                                      ? {
+                                          width: ["0%", "100%"],
+                                        }
+                                      : {}
+                                  }
+                                  transition={
+                                    isPlaying
+                                      ? {
+                                          duration: duration - currentTime,
+                                          ease: "linear",
+                                        }
+                                      : {}
+                                  }
+                                />
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
+                        </>
+                      )}
 
                       {/* Spotify Link */}
                       <motion.a
                         href={musicRecommendation.spotifyUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full font-bold transition-all duration-300 flex items-center space-x-2"
+                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full font-bold transition-all duration-300 inline-flex items-center space-x-2"
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                       >

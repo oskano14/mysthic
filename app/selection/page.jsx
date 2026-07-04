@@ -6,11 +6,28 @@ import TarotCard from "@/components/TarotCard";
 import { tarotCards } from "@/data/tarotCards";
 import { ArrowLeft, Sparkles, Star } from "lucide-react";
 
+// Mélange Fisher-Yates : renvoie une nouvelle copie mélangée du tableau
+const shuffle = (array) => {
+  const copy = [...array];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+};
+
 export default function CardSelection() {
   const router = useRouter();
   const [selectedCards, setSelectedCards] = useState([]);
   const [currentPhase, setCurrentPhase] = useState("past");
   const [hoveredCard, setHoveredCard] = useState(null);
+  // Disposition des cartes : ordre d'origine au rendu serveur, puis mélangée
+  // côté client au montage — nouveau tirage = nouvelle disposition aléatoire.
+  const [deck, setDeck] = useState(tarotCards);
+
+  useEffect(() => {
+    setDeck(shuffle(tarotCards));
+  }, []);
 
   const phases = {
     past: { title: "PASSÉ", subtitle: "Ce qui vous a mené ici", index: 0 },
@@ -24,8 +41,7 @@ export default function CardSelection() {
 
   // sélection d’une carte ----------------------------------------------------
   const handleCardSelect = (card) => {
-    const newSelected = [...selectedCards, { ...card, phase: currentPhase }];
-    setSelectedCards(newSelected);
+    setSelectedCards((prev) => [...prev, { ...card, phase: currentPhase }]);
 
     if (currentPhase === "past") setCurrentPhase("present");
     else if (currentPhase === "present") setCurrentPhase("future");
@@ -107,7 +123,7 @@ export default function CardSelection() {
       <div className="relative z-10 min-h-screen pt-20 px-8">
         {/* Back Button */}
         <motion.button
-          onClick={() => navigate("/")}
+          onClick={() => router.push("/")}
           className="fixed top-8 left-8 z-50 flex items-center space-x-2 text-mystique-gold/70 hover:text-mystique-gold transition-all duration-300 group"
           whileHover={{ x: -5 }}
           whileTap={{ scale: 0.95 }}
@@ -264,7 +280,7 @@ export default function CardSelection() {
           animate={{ opacity: 1 }}
           transition={{ duration: 1, delay: 0.3 }}
         >
-          {tarotCards.map((card, index) => (
+          {deck.map((card, index) => (
             <motion.div
               key={card.id}
               initial={{ opacity: 0, y: 100, rotateX: 45 }}
