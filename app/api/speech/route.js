@@ -24,9 +24,9 @@ export async function POST(request) {
     );
   }
 
-  // Voix "Charlotte" par défaut : timbre mystérieux et intrigant.
+  // Voix "Sarah" par défaut (mature, rassurante, posée).
   // Modifiable via la variable ELEVENLABS_VOICE_ID.
-  const voiceId = process.env.ELEVENLABS_VOICE_ID || "XB0fDUnXU5powFXDhCwa";
+  const voiceId = process.env.ELEVENLABS_VOICE_ID || "EXAVITQu4vr4xnSDxMaL";
 
   try {
     const res = await fetch(
@@ -43,9 +43,9 @@ export async function POST(request) {
           text: text.slice(0, 2500),
           model_id: "eleven_multilingual_v2",
           voice_settings: {
-            stability: 0.35,
-            similarity_boost: 0.75,
-            style: 0.45,
+            stability: 0.6,
+            similarity_boost: 0.9,
+            style: 0.0,
             use_speaker_boost: true,
           },
         }),
