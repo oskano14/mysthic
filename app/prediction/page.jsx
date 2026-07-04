@@ -16,6 +16,12 @@ import {
 } from "lucide-react";
 import { tarotCards } from "@/data/tarotCards"; // si besoin
 import { musicCatalog } from "@/data/musicCatalog";
+
+// Court silence servant à "débloquer" la lecture audio pendant le clic
+// (contournement de la politique d'autoplay de Safari sur lecture différée).
+const SILENT_AUDIO =
+  "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
+
 export default function Prediction() {
   const router = useRouter();
   const [selectedCards, setSelectedCards] = useState([]);
@@ -110,14 +116,28 @@ export default function Prediction() {
   /* Lecture vocale de la prédiction (voix ElevenLabs)       */
   /* ------------------------------------------------------ */
   const toggleSpeech = async () => {
+    const audio = voiceAudioRef.current;
+    if (!audio) return;
+
     // En cours de lecture -> on arrête
-    if (isSpeaking && voiceAudioRef.current) {
-      voiceAudioRef.current.pause();
-      voiceAudioRef.current.currentTime = 0;
+    if (isSpeaking) {
+      audio.pause();
+      audio.currentTime = 0;
       setIsSpeaking(false);
       return;
     }
     if (isGeneratingVoice || !prediction) return;
+
+    // Amorce l'élément audio DANS le geste utilisateur (court silence) : sans
+    // cela, Safari bloque le play() qui suit le fetch (lecture jugée automatique).
+    try {
+      audio.src = SILENT_AUDIO;
+      await audio.play();
+      audio.pause();
+      audio.currentTime = 0;
+    } catch {
+      /* certains navigateurs n'ont pas besoin de l'amorce */
+    }
 
     setIsGeneratingVoice(true);
     try {
@@ -136,11 +156,7 @@ export default function Prediction() {
       const url = URL.createObjectURL(blob);
       voiceUrlRef.current = url;
 
-      const audio = new Audio(url);
-      voiceAudioRef.current = audio;
-      audio.onended = () => setIsSpeaking(false);
-      audio.onerror = () => setIsSpeaking(false);
-
+      audio.src = url;
       await audio.play();
       setIsSpeaking(true);
     } catch (err) {
@@ -414,6 +430,14 @@ export default function Prediction() {
                     </>
                   )}
                 </motion.button>
+
+                {/* Élément audio persistant piloté par toggleSpeech */}
+                <audio
+                  ref={voiceAudioRef}
+                  playsInline
+                  onEnded={() => setIsSpeaking(false)}
+                  onError={() => setIsSpeaking(false)}
+                />
               </motion.div>
             )}
           </div>
