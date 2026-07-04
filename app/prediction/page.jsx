@@ -11,6 +11,7 @@ import {
   Sparkles,
   Volume2,
   VolumeX,
+  Loader2,
   Star,
 } from "lucide-react";
 import { tarotCards } from "@/data/tarotCards"; // si besoin
@@ -25,9 +26,12 @@ export default function Prediction() {
   const [isLoadingMusic, setIsLoadingMusic] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isGeneratingVoice, setIsGeneratingVoice] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(30);
   const audioRef = useRef(null);
+  const voiceAudioRef = useRef(null);
+  const voiceUrlRef = useRef(null);
 
   const goBack = () => {
     router.push("/selection");
@@ -103,39 +107,53 @@ export default function Prediction() {
   };
 
   /* ------------------------------------------------------ */
-  /* Lecture vocale de la prédiction (speechSynthesis)       */
+  /* Lecture vocale de la prédiction (voix ElevenLabs)       */
   /* ------------------------------------------------------ */
-  const toggleSpeech = () => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
+  const toggleSpeech = async () => {
+    // En cours de lecture -> on arrête
+    if (isSpeaking && voiceAudioRef.current) {
+      voiceAudioRef.current.pause();
+      voiceAudioRef.current.currentTime = 0;
       setIsSpeaking(false);
       return;
     }
+    if (isGeneratingVoice || !prediction) return;
 
-    const utterance = new SpeechSynthesisUtterance(
-      prediction.replace(/[*#_]/g, "")
-    );
-    utterance.lang = "fr-FR";
-    const frenchVoice = window.speechSynthesis
-      .getVoices()
-      .find((voice) => voice.lang.startsWith("fr"));
-    if (frenchVoice) utterance.voice = frenchVoice;
-    utterance.rate = 0.95;
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
+    setIsGeneratingVoice(true);
+    try {
+      const res = await fetch("/api/speech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: prediction.replace(/[*#_]/g, "") }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || `Erreur ${res.status}`);
+      }
 
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-    setIsSpeaking(true);
+      const blob = await res.blob();
+      if (voiceUrlRef.current) URL.revokeObjectURL(voiceUrlRef.current);
+      const url = URL.createObjectURL(blob);
+      voiceUrlRef.current = url;
+
+      const audio = new Audio(url);
+      voiceAudioRef.current = audio;
+      audio.onended = () => setIsSpeaking(false);
+      audio.onerror = () => setIsSpeaking(false);
+
+      await audio.play();
+      setIsSpeaking(true);
+    } catch (err) {
+      console.error("Erreur voix ElevenLabs:", err);
+    } finally {
+      setIsGeneratingVoice(false);
+    }
   };
 
   useEffect(() => {
     return () => {
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
+      if (voiceAudioRef.current) voiceAudioRef.current.pause();
+      if (voiceUrlRef.current) URL.revokeObjectURL(voiceUrlRef.current);
     };
   }, []);
 
@@ -368,11 +386,19 @@ export default function Prediction() {
                 {/* Lecture vocale */}
                 <motion.button
                   onClick={toggleSpeech}
-                  className="mt-8 flex items-center space-x-3 px-6 py-3 rounded-full border border-mystique-gold/40 text-mystique-gold hover:bg-mystique-gold/10 transition-all duration-300"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                  disabled={isGeneratingVoice}
+                  className="mt-8 flex items-center space-x-3 px-6 py-3 rounded-full border border-mystique-gold/40 text-mystique-gold hover:bg-mystique-gold/10 transition-all duration-300 disabled:opacity-60 disabled:cursor-wait"
+                  whileHover={isGeneratingVoice ? {} : { scale: 1.05 }}
+                  whileTap={isGeneratingVoice ? {} : { scale: 0.95 }}
                 >
-                  {isSpeaking ? (
+                  {isGeneratingVoice ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span className="font-elegant tracking-wide">
+                        Invocation de la voix mystique...
+                      </span>
+                    </>
+                  ) : isSpeaking ? (
                     <>
                       <VolumeX className="w-5 h-5" />
                       <span className="font-elegant tracking-wide">
