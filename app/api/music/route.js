@@ -116,7 +116,11 @@ export async function POST(request) {
       { headers: { Authorization: `Bearer ${token}` } }
     );
     if (!searchRes.ok) {
-      throw new Error(`Recherche Spotify échouée (${searchRes.status}).`);
+      const detail = await searchRes.text();
+      console.error("Erreur recherche Spotify:", searchRes.status, detail);
+      throw new Error(
+        `Recherche Spotify échouée (${searchRes.status}): ${detail.slice(0, 300)}`
+      );
     }
 
     const searchData = await searchRes.json();
