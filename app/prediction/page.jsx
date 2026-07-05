@@ -251,10 +251,10 @@ export default function Prediction() {
         ))}
       </div>
 
-      <div className="relative z-10 min-h-screen pt-20 px-8">
+      <div className="relative z-10 min-h-screen pt-20 px-4 md:px-8">
         {/* Header */}
         <motion.div
-          className="flex items-center justify-between mb-16"
+          className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-10 md:mb-16"
           initial={{ opacity: 0, y: -30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
@@ -270,7 +270,7 @@ export default function Prediction() {
           </motion.button>
 
           <motion.h1
-            className="text-5xl font-bold bg-gradient-to-r from-mystique-gold via-mystique-bronze to-mystique-gold bg-clip-text text-transparent"
+            className="text-3xl sm:text-4xl md:text-5xl font-bold text-center bg-gradient-to-r from-mystique-gold via-mystique-bronze to-mystique-gold bg-clip-text text-transparent"
             animate={{
               backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
             }}
@@ -282,12 +282,12 @@ export default function Prediction() {
             VOTRE PRÉDICTION
           </motion.h1>
 
-          <div className="w-32"></div>
+          <div className="hidden sm:block w-32"></div>
         </motion.div>
 
         {/* Selected Cards */}
         <motion.div
-          className="flex justify-center space-x-16 mb-20"
+          className="flex flex-wrap justify-center gap-4 sm:gap-8 md:gap-16 mb-12 md:mb-20"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1.2 }}
@@ -310,15 +310,15 @@ export default function Prediction() {
                 <div className="absolute inset-0 bg-mystique-gold/20 rounded-3xl blur-2xl group-hover:bg-mystique-gold/30 transition-all duration-700"></div>
 
                 {/* Card */}
-                <div className="relative w-48 h-72 rounded-3xl overflow-hidden border-2 border-mystique-gold/50 shadow-2xl group-hover:border-mystique-gold/70 transition-all duration-500">
+                <div className="relative w-24 h-36 sm:w-36 sm:h-56 md:w-48 md:h-72 rounded-2xl md:rounded-3xl overflow-hidden border-2 border-mystique-gold/50 shadow-2xl group-hover:border-mystique-gold/70 transition-all duration-500">
                   <img
                     src={card.image}
                     alt={card.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                  <div className="absolute bottom-6 left-6 right-6">
-                    <h3 className="text-lg font-bold text-mystique-gold text-center">
+                  <div className="absolute bottom-2 left-2 right-2 sm:bottom-6 sm:left-6 sm:right-6">
+                    <h3 className="text-xs sm:text-base md:text-lg font-bold text-mystique-gold text-center">
                       {card.name}
                     </h3>
                   </div>
@@ -350,7 +350,7 @@ export default function Prediction() {
 
         {/* Prediction Section */}
         <motion.div
-          className="max-w-5xl mx-auto bg-black/40 backdrop-blur-sm rounded-3xl p-12 mb-16 border border-mystique-gold/20 relative overflow-hidden"
+          className="max-w-5xl mx-auto bg-black/40 backdrop-blur-sm rounded-2xl md:rounded-3xl p-6 sm:p-8 md:p-12 mb-16 border border-mystique-gold/20 relative overflow-hidden"
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, delay: 0.8 }}
@@ -372,12 +372,12 @@ export default function Prediction() {
           </div>
 
           <div className="relative z-10">
-            <div className="flex items-center space-x-4 mb-8">
-              <Sparkles className="w-8 h-8 text-mystique-gold animate-pulse" />
-              <h2 className="text-3xl font-bold text-mystique-gold tracking-wide">
+            <div className="flex items-center justify-center sm:justify-start space-x-2 md:space-x-4 mb-8">
+              <Sparkles className="w-5 h-5 md:w-8 md:h-8 shrink-0 text-mystique-gold animate-pulse" />
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-mystique-gold tracking-wide text-center">
                 INTERPRÉTATION MYSTIQUE
               </h2>
-              <Sparkles className="w-8 h-8 text-mystique-gold animate-pulse" />
+              <Sparkles className="w-5 h-5 md:w-8 md:h-8 shrink-0 text-mystique-gold animate-pulse" />
             </div>
 
             {isLoadingPrediction ? (

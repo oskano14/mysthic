@@ -120,16 +120,16 @@ export default function CardSelection() {
       <div className="absolute bottom-0 right-0 w-32 h-32 border-r-2 border-b-2 border-mystique-gold/20"></div>
 
       {/* Content */}
-      <div className="relative z-10 min-h-screen pt-20 px-8">
+      <div className="relative z-10 min-h-screen pt-20 px-4 md:px-8">
         {/* Back Button */}
         <motion.button
           onClick={() => router.push("/")}
-          className="fixed top-8 left-8 z-50 flex items-center space-x-2 text-mystique-gold/70 hover:text-mystique-gold transition-all duration-300 group"
+          className="fixed top-20 left-4 sm:left-8 z-50 flex items-center space-x-2 text-mystique-gold/70 hover:text-mystique-gold transition-all duration-300 group"
           whileHover={{ x: -5 }}
           whileTap={{ scale: 0.95 }}
         >
           <ArrowLeft className="w-5 h-5 group-hover:animate-pulse" />
-          <span className="font-elegant text-sm tracking-wider">
+          <span className="font-elegant text-sm tracking-wider hidden sm:inline">
             RETOUR AU MENU PRINCIPAL
           </span>
         </motion.button>
@@ -180,7 +180,7 @@ export default function CardSelection() {
         <AnimatePresence>
           {selectedCards.length > 0 && (
             <motion.div
-              className="flex justify-center space-x-12 mb-16"
+              className="flex flex-wrap justify-center gap-4 sm:gap-8 md:gap-12 mb-16"
               initial={{ opacity: 0, y: -50 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8 }}
@@ -206,7 +206,7 @@ export default function CardSelection() {
                   }}
                   className="relative group"
                 >
-                  <div className="w-40 h-64 relative">
+                  <div className="w-24 h-36 sm:w-32 sm:h-52 md:w-40 md:h-64 relative">
                     {/* Glow Effect */}
                     <div className="absolute inset-0 bg-mystique-gold/20 rounded-2xl blur-xl group-hover:bg-mystique-gold/30 transition-all duration-500"></div>
 
@@ -218,15 +218,15 @@ export default function CardSelection() {
                         className="w-full h-full object-cover"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                      <div className="absolute bottom-4 left-4 right-4">
-                        <h3 className="text-sm font-bold text-mystique-gold text-center">
+                      <div className="absolute bottom-2 left-2 right-2 sm:bottom-4 sm:left-4 sm:right-4">
+                        <h3 className="text-xs sm:text-sm font-bold text-mystique-gold text-center">
                           {card.name}
                         </h3>
                       </div>
                     </div>
 
                     {/* Phase Label */}
-                    <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 text-center">
+                    <div className="absolute -bottom-8 sm:-bottom-12 left-1/2 transform -translate-x-1/2 text-center">
                       <span className="text-xs text-mystique-gold/60 font-elegant tracking-widest">
                         {phases[card.phase].title}
                       </span>
@@ -263,10 +263,10 @@ export default function CardSelection() {
               transition={{ duration: 0.6 }}
               className="text-center mb-12"
             >
-              <h2 className="text-4xl font-bold text-mystique-gold mb-2 tracking-wider">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-mystique-gold mb-2 tracking-wider">
                 {phases[currentPhase].title}
               </h2>
-              <p className="text-mystique-gold/60 font-elegant text-lg">
+              <p className="text-mystique-gold/60 font-elegant text-base md:text-lg">
                 {phases[currentPhase].subtitle}
               </p>
             </motion.div>
@@ -275,7 +275,7 @@ export default function CardSelection() {
 
         {/* Cards Grid */}
         <motion.div
-          className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-11 gap-4 max-w-7xl mx-auto"
+          className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-11 gap-2 sm:gap-4 max-w-7xl mx-auto"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 1, delay: 0.3 }}

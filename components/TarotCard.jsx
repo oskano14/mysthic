@@ -16,7 +16,7 @@ const TarotCard = ({ card, onSelect, disabled, isCompleted, isHovered }) => {
 
   return (
     <motion.div
-      className={`relative cursor-pointer m-3 ${
+      className={`relative cursor-pointer m-1 sm:m-3 ${
         disabled ? "opacity-30 cursor-not-allowed" : ""
       }`}
       onClick={handleClick}
@@ -43,7 +43,7 @@ const TarotCard = ({ card, onSelect, disabled, isCompleted, isHovered }) => {
       <div
         className={`card-flip ${
           isFlipped ? "flipped" : ""
-        } w-full h-32 relative`}
+        } w-full h-24 sm:h-32 relative`}
       >
         {/* Carte retourne */}
         <div className="card-face absolute inset-0 bg-gradient-to-br from-mystique-gold/20 via-mystique-gold/10 to-black border border-mystique-gold/30 rounded-xl flex items-center justify-center shadow-lg">
