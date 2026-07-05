@@ -117,8 +117,11 @@ export default function Prediction() {
 
     if (isSpeaking) {
       audio.pause();
+      audio.pause();
       audio.currentTime = 0;
-      stopAmbience();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
       setIsSpeaking(false);
       return;
     }
@@ -140,7 +143,7 @@ export default function Prediction() {
       const res = await fetch("/api/speech", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: prediction.replace(/[*#_]/g, "") }),
+        body: JSON.stringify({ text: prediction.replace(/<[^>]*>?/gm, '').replace(/[*#_]/g, "") }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -157,7 +160,22 @@ export default function Prediction() {
       setIsSpeaking(true);
     } catch (err) {
       console.error("Erreur voix ElevenLabs:", err);
-      stopAmbience();
+      // Fallback: Web Speech API (Voix système)
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        const cleanText = prediction.replace(/<[^>]*>?/gm, '').replace(/[*#_]/g, "");
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.lang = "fr-FR";
+        utterance.pitch = 0.8;
+        utterance.rate = 0.9;
+        
+        const voices = window.speechSynthesis.getVoices();
+        const frenchVoice = voices.find(v => v.lang.startsWith("fr") && (v.name.includes("Female") || v.name.includes("Google")));
+        if (frenchVoice) utterance.voice = frenchVoice;
+
+        utterance.onend = () => setIsSpeaking(false);
+        window.speechSynthesis.speak(utterance);
+        setIsSpeaking(true);
+      }
     } finally {
       setIsGeneratingVoice(false);
     }
@@ -165,10 +183,12 @@ export default function Prediction() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!isSpeaking) return;
-    if (ambienceEnabled) startAmbience();
-    else stopAmbience();
-  }, [ambienceEnabled, isSpeaking]);
+    if (ambienceEnabled && prediction) {
+      startAmbience();
+    } else {
+      stopAmbience();
+    }
+  }, [ambienceEnabled, prediction]);
 
   useEffect(() => {
     const audioNode = voiceAudioRef.current;
@@ -374,7 +394,16 @@ export default function Prediction() {
               >
                 <div 
                   className="text-mystique-rose/90 font-elegant leading-relaxed text-lg whitespace-pre-line [&>b]:font-bold [&>b]:text-mystique-gold [&>b]:drop-shadow-glow"
-                  dangerouslySetInnerHTML={{ __html: prediction.replace(/\n/g, '<br/>') }}
+                  dangerouslySetInnerHTML={{ 
+                    __html: prediction
+                      .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                      .replace(/\*(.*?)\*/g, '<b>$1</b>')
+                      .replace(/&lt;b&gt;/g, '<b>')
+                      .replace(/&lt;\/b&gt;/g, '</b>')
+                      .replace(/<b>(.*?)<\/b>/g, '<b>$1</b>')
+                      .replace(/\*/g, '')
+                      .replace(/\n/g, '<br/>')
+                  }}
                 />
 
                 {/* Lecture vocale */}
