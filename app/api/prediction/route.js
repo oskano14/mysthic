@@ -3,10 +3,12 @@ import { NextResponse } from "next/server";
 export async function POST(request) {
   const apiKey = process.env.MISTRAL_API_KEY;
   if (!apiKey) {
-    return NextResponse.json(
-      { error: "MISTRAL_API_KEY n'est pas configurée côté serveur." },
-      { status: 500 }
-    );
+    // Return a mocked prediction to allow testing without an API key
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    return NextResponse.json({
+      prediction:
+        "Je suis Taroh. Ton passé montre un ancrage fort, mais des doutes persistent. Le présent exige de toi une grande clarté mentale et de laisser derrière toi ce qui ne te sert plus. Le futur promet des révélations inattendues et une renaissance spirituelle si tu suis ton intuition profonde.",
+    });
   }
 
   let body;

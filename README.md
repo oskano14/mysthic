@@ -1,6 +1,6 @@
-# 🔮 Mysthic Tarot
+# 🔮 mystic Tarot
 
-**Mysthic Tarot** est une application de tirage divinatoire interactif. Elle permet à l'utilisateur de tirer trois cartes de tarot (passé, présent, futur) et d'obtenir une interprétation générée automatiquement par une intelligence artificielle.
+**mystic Tarot** est une application de tirage divinatoire interactif. Elle permet à l'utilisateur de tirer trois cartes de tarot (passé, présent, futur) et d'obtenir une interprétation générée automatiquement par une intelligence artificielle.
 
 ---
 
@@ -9,8 +9,8 @@
 ### 1. Cloner le dépôt
 
 ```bash
-git clone https://github.com/oskano14/mysthic.git
-cd mysthic
+git clone https://github.com/oskano14/mystic.git
+cd mystic
 ```
 
 ### 2. Installer les dépendances

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   Music,
@@ -12,23 +12,21 @@ import {
   Loader2,
   Star,
 } from "lucide-react";
+import Image from "next/image";
 import { createMysticAmbience } from "@/lib/ambience";
+import { GLSLHills } from "@/components/ui/glsl-hills";
+import { InteractiveEye } from "@/components/ui/interactive-eye";
 
-// Court silence servant à "débloquer" la lecture audio pendant le clic
-// (contournement de la politique d'autoplay de Safari sur lecture différée).
 const SILENT_AUDIO =
   "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
 
-// Volume de la nappe synthétisée de fond (la voix reste au premier plan).
 const AMBIENCE_VOLUME = 0.18;
-// Volume du fichier d'ambiance libre de droits (public/ambiance.mp3) s'il existe.
 const AMBIENCE_FILE_VOLUME = 0.4;
-// Fichier d'ambiance optionnel : déposez un .mp3 libre de droits à cet emplacement.
 const AMBIENCE_FILE = "/ambiance.mp3";
 
 export default function Prediction() {
   const router = useRouter();
-  const [selectedCards, setSelectedCards] = useState([]);
+  const [selectedCards, setSelectedCards] = useState<any[]>([]);
   const [theme, setTheme] = useState("général");
   const [prediction, setPrediction] = useState("");
   const [isLoadingPrediction, setIsLoadingPrediction] = useState(true);
@@ -36,12 +34,11 @@ export default function Prediction() {
   const [isGeneratingVoice, setIsGeneratingVoice] = useState(false);
   const [ambienceEnabled, setAmbienceEnabled] = useState(true);
   const [hasAmbienceFile, setHasAmbienceFile] = useState(false);
-  const voiceAudioRef = useRef(null);
-  const voiceUrlRef = useRef(null);
-  const ambienceRef = useRef(null);
-  const ambienceFileRef = useRef(null);
+  const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
+  const voiceUrlRef = useRef<string | null>(null);
+  const ambienceRef = useRef<any>(null);
+  const ambienceFileRef = useRef<HTMLAudioElement | null>(null);
 
-  // Détecte la présence d'un fichier d'ambiance libre de droits.
   useEffect(() => {
     fetch(AMBIENCE_FILE, { method: "HEAD" })
       .then((r) => setHasAmbienceFile(r.ok))
@@ -52,17 +49,12 @@ export default function Prediction() {
     router.push("/selection");
   };
 
-  /* ------------------------------------------------------ */
-  /* 1. récupérer les cartes stockées par CardSelection      */
-  /* ------------------------------------------------------ */
   useEffect(() => {
     const stored = sessionStorage.getItem("selectedCards");
     if (stored) setSelectedCards(JSON.parse(stored));
   }, []);
 
-  /* ------------------------------------------------------ */
-  /* 2. lancer l’appel Mistral quand on a les 3 cartes       */
-  /* ------------------------------------------------------ */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (selectedCards.length === 3) generatePrediction();
   }, [selectedCards]);
@@ -90,16 +82,11 @@ export default function Prediction() {
       setPrediction(interpretationText);
     } catch (err) {
       console.error("Erreur Mistral:", err);
-      setPrediction("❌ Une erreur ésotérique a bloqué la prophétie.");
+      setPrediction("Une erreur ésotérique a bloqué la prophétie.");
     }
     setIsLoadingPrediction(false);
   };
 
-  /* ------------------------------------------------------ */
-  /* Ambiance de fond : fichier libre de droits si présent,  */
-  /* sinon nappe mystique synthétisée. À appeler dans un     */
-  /* geste utilisateur (Safari).                             */
-  /* ------------------------------------------------------ */
   const startSynthAmbience = () => {
     if (!ambienceRef.current) ambienceRef.current = createMysticAmbience();
     ambienceRef.current.prime();
@@ -122,14 +109,10 @@ export default function Prediction() {
     ambienceRef.current?.setVolume(0);
   };
 
-  /* ------------------------------------------------------ */
-  /* Lecture vocale (voix ElevenLabs) + ambiance mystique    */
-  /* ------------------------------------------------------ */
   const toggleSpeech = async () => {
     const audio = voiceAudioRef.current;
     if (!audio) return;
 
-    // En cours de lecture -> on arrête tout
     if (isSpeaking) {
       audio.pause();
       audio.currentTime = 0;
@@ -139,19 +122,15 @@ export default function Prediction() {
     }
     if (isGeneratingVoice || !prediction) return;
 
-    // Ambiance : démarrée DANS le geste utilisateur (Safari), elle habille
-    // l'attente pendant que la voix se génère.
     if (ambienceEnabled) startAmbience();
 
-    // Amorce l'élément audio de la voix DANS le geste (sinon Safari bloque le
-    // play() qui suit le fetch, jugé automatique).
     try {
       audio.src = SILENT_AUDIO;
       await audio.play();
       audio.pause();
       audio.currentTime = 0;
     } catch {
-      /* certains navigateurs n'ont pas besoin de l'amorce */
+      // Ignore
     }
 
     setIsGeneratingVoice(true);
@@ -182,17 +161,17 @@ export default function Prediction() {
     }
   };
 
-  // Coupe/rallume l'ambiance en direct pendant la lecture.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!isSpeaking) return;
     if (ambienceEnabled) startAmbience();
     else stopAmbience();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ambienceEnabled, isSpeaking]);
 
   useEffect(() => {
+    const audioNode = voiceAudioRef.current;
     return () => {
-      if (voiceAudioRef.current) voiceAudioRef.current.pause();
+      if (audioNode) audioNode.pause();
       if (voiceUrlRef.current) URL.revokeObjectURL(voiceUrlRef.current);
       ambienceRef.current?.dispose();
     };
@@ -200,9 +179,9 @@ export default function Prediction() {
 
   if (selectedCards.length === 0) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0515] flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-mystique-gold mb-4">
+          <h1 className="text-4xl font-bold text-mystique-rose mb-4">
             Aucune carte sélectionnée
           </h1>
           <Link href="/selection" className="mystique-button">
@@ -214,26 +193,16 @@ export default function Prediction() {
   }
 
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden">
-      {/* Background Effects */}
-      <div className="absolute inset-0">
-        <div className="absolute top-20 left-20 w-64 h-64 bg-mystique-gold/5 rounded-full blur-3xl animate-pulse"></div>
-        <div
-          className="absolute bottom-20 right-20 w-96 h-96 bg-mystique-gold/3 rounded-full blur-3xl animate-pulse"
-          style={{ animationDelay: "2s" }}
-        ></div>
-        <div
-          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-mystique-gold/2 rounded-full blur-3xl animate-pulse"
-          style={{ animationDelay: "4s" }}
-        ></div>
-      </div>
+    <div className="min-h-screen bg-[#0a0515] relative overflow-hidden">
+      {/* 3D Background */}
+      <GLSLHills />
 
       {/* Decorative Elements */}
-      <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
         {[...Array(20)].map((_, i) => (
           <motion.div
             key={i}
-            className="absolute w-1 h-1 bg-mystique-gold/30 rounded-full"
+            className="absolute w-1 h-1 bg-mystique-rose/30 rounded-full"
             style={{
               top: `${Math.random() * 100}%`,
               left: `${Math.random() * 100}%`,
@@ -261,7 +230,7 @@ export default function Prediction() {
         >
           <motion.button
             onClick={goBack}
-            className="flex items-center space-x-3 text-mystique-gold/70 hover:text-mystique-gold transition-all duration-300 group"
+            className="flex items-center space-x-3 text-mystique-rose/70 hover:text-mystique-rose transition-all duration-300 group"
             whileHover={{ x: -5 }}
             whileTap={{ scale: 0.95 }}
           >
@@ -270,7 +239,7 @@ export default function Prediction() {
           </motion.button>
 
           <motion.h1
-            className="text-3xl sm:text-4xl md:text-5xl font-bold text-center bg-gradient-to-r from-mystique-gold via-mystique-bronze to-mystique-gold bg-clip-text text-transparent"
+            className="text-3xl sm:text-4xl md:text-5xl font-bold text-center bg-rose-gradient bg-clip-text text-transparent uppercase font-mystique drop-shadow-lg"
             animate={{
               backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
             }}
@@ -307,26 +276,23 @@ export default function Prediction() {
             >
               <div className="relative mb-6">
                 {/* Glow Effect */}
-                <div className="absolute inset-0 bg-mystique-gold/20 rounded-3xl blur-2xl group-hover:bg-mystique-gold/30 transition-all duration-700"></div>
+                <div className="absolute inset-0 bg-mystique-rose/20 rounded-3xl blur-2xl group-hover:bg-mystique-rose/30 transition-all duration-700"></div>
 
                 {/* Card */}
-                <div className="relative w-24 h-36 sm:w-36 sm:h-56 md:w-48 md:h-72 rounded-2xl md:rounded-3xl overflow-hidden border-2 border-mystique-gold/50 shadow-2xl group-hover:border-mystique-gold/70 transition-all duration-500">
-                  <img
+                <div className="relative w-24 h-36 sm:w-36 sm:h-56 md:w-48 md:h-72 rounded-2xl md:rounded-3xl overflow-hidden border-2 border-mystique-rose/50 shadow-2xl group-hover:border-mystique-rose/70 transition-all duration-500">
+                  <Image
                     src={card.image}
                     alt={card.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                    fill
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    className="object-cover group-hover:scale-105 transition-transform duration-700"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                  <div className="absolute bottom-2 left-2 right-2 sm:bottom-6 sm:left-6 sm:right-6">
-                    <h3 className="text-xs sm:text-base md:text-lg font-bold text-mystique-gold text-center">
-                      {card.name}
-                    </h3>
-                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0a0515]/80 via-transparent to-transparent"></div>
                 </div>
 
                 {/* Floating Elements */}
                 <motion.div
-                  className="absolute -top-4 -right-4 w-4 h-4 bg-mystique-gold rounded-full"
+                  className="absolute -top-4 -right-4 w-4 h-4 bg-mystique-rose rounded-full"
                   animate={{
                     y: [-10, 10, -10],
                     opacity: [0.3, 1, 0.3],
@@ -339,9 +305,12 @@ export default function Prediction() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <span className="text-mystique-gold/60 font-elegant text-sm tracking-widest">
-                  {index === 0 ? "PASSÉ" : index === 1 ? "PRÉSENT" : "FUTUR"}
+              <div className="space-y-2 mt-6">
+                <h3 className="text-lg sm:text-xl md:text-2xl font-mystique font-bold text-mystique-gold drop-shadow-glow tracking-wide">
+                  {card.name}
+                </h3>
+                <span className="text-mystique-rose/60 font-elegant text-xs sm:text-sm tracking-widest uppercase block">
+                  {index === 0 ? "Passé" : index === 1 ? "Présent" : "Futur"}
                 </span>
               </div>
             </motion.div>
@@ -350,52 +319,46 @@ export default function Prediction() {
 
         {/* Prediction Section */}
         <motion.div
-          className="max-w-5xl mx-auto bg-black/40 backdrop-blur-sm rounded-2xl md:rounded-3xl p-6 sm:p-8 md:p-12 mb-16 border border-mystique-gold/20 relative overflow-hidden"
+          className="max-w-5xl mx-auto bg-[#120a22]/60 backdrop-blur-md rounded-2xl md:rounded-3xl p-6 sm:p-8 md:p-12 mb-16 border border-mystique-rose/20 relative overflow-hidden"
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, delay: 0.8 }}
         >
           {/* Background Pattern */}
-          <div className="absolute inset-0 opacity-5">
+          <div className="absolute inset-0 opacity-10">
             <div className="absolute top-4 left-4">
-              <Star className="w-8 h-8 text-mystique-gold" />
+              <Star className="w-8 h-8 text-mystique-rose" />
             </div>
             <div className="absolute top-4 right-4">
-              <Star className="w-6 h-6 text-mystique-gold" />
+              <Star className="w-6 h-6 text-mystique-rose" />
             </div>
             <div className="absolute bottom-4 left-4">
-              <Star className="w-6 h-6 text-mystique-gold" />
+              <Star className="w-6 h-6 text-mystique-rose" />
             </div>
             <div className="absolute bottom-4 right-4">
-              <Star className="w-8 h-8 text-mystique-gold" />
+              <Star className="w-8 h-8 text-mystique-rose" />
             </div>
           </div>
 
           <div className="relative z-10">
             <div className="flex items-center justify-center sm:justify-start space-x-2 md:space-x-4 mb-8">
-              <Sparkles className="w-5 h-5 md:w-8 md:h-8 shrink-0 text-mystique-gold animate-pulse" />
-              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-mystique-gold tracking-wide text-center">
+              <Sparkles className="w-5 h-5 md:w-8 md:h-8 shrink-0 text-mystique-rose animate-pulse" />
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-mystique-rose tracking-wide text-center font-mystique">
                 INTERPRÉTATION MYSTIQUE
               </h2>
-              <Sparkles className="w-5 h-5 md:w-8 md:h-8 shrink-0 text-mystique-gold animate-pulse" />
+              <Sparkles className="w-5 h-5 md:w-8 md:h-8 shrink-0 text-mystique-rose animate-pulse" />
             </div>
 
             {isLoadingPrediction ? (
               <div className="flex items-center justify-center py-20">
                 <div className="text-center">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{
-                      duration: 2,
-                      repeat: Infinity,
-                      ease: "linear",
-                    }}
-                    className="w-16 h-16 border-4 border-mystique-gold/20 border-t-mystique-gold rounded-full mx-auto mb-6"
-                  />
-                  <p className="text-mystique-gold/70 font-elegant text-xl">
-                    L'IA mystique analyse vos cartes sacrées...
+                  <div className="mb-6 scale-[0.6]">
+                    <InteractiveEye />
+                  </div>
+                  <p className="text-mystique-rose/90 font-elegant text-xl text-shadow-glow">
+                    Taroh analyse vos cartes sacrées...
                   </p>
-                  <p className="text-mystique-gold/50 font-elegant text-sm mt-2">
+                  <p className="text-mystique-rose/70 font-elegant text-sm mt-2">
                     Connexion aux énergies universelles en cours...
                   </p>
                 </div>
@@ -407,7 +370,7 @@ export default function Prediction() {
                 transition={{ duration: 1.5 }}
                 className="prose prose-lg max-w-none"
               >
-                <div className="text-mystique-gold/90 font-elegant leading-relaxed text-lg whitespace-pre-line">
+                <div className="text-mystique-rose/90 font-elegant leading-relaxed text-lg whitespace-pre-line">
                   {prediction}
                 </div>
 
@@ -415,7 +378,7 @@ export default function Prediction() {
                 <motion.button
                   onClick={toggleSpeech}
                   disabled={isGeneratingVoice}
-                  className="mt-8 flex items-center space-x-3 px-6 py-3 rounded-full border border-mystique-gold/40 text-mystique-gold hover:bg-mystique-gold/10 transition-all duration-300 disabled:opacity-60 disabled:cursor-wait"
+                  className="mt-8 flex items-center space-x-3 px-6 py-3 rounded-full border border-mystique-rose/40 text-mystique-rose hover:bg-mystique-rose/10 transition-all duration-300 disabled:opacity-60 disabled:cursor-wait"
                   whileHover={isGeneratingVoice ? {} : { scale: 1.05 }}
                   whileTap={isGeneratingVoice ? {} : { scale: 0.95 }}
                 >
@@ -446,7 +409,7 @@ export default function Prediction() {
                 {/* Bascule de l'ambiance mystique de fond */}
                 <button
                   onClick={() => setAmbienceEnabled((v) => !v)}
-                  className="mt-4 flex items-center space-x-2 text-sm font-elegant text-mystique-gold/60 hover:text-mystique-gold transition-colors"
+                  className="mt-4 flex items-center space-x-2 text-sm font-elegant text-mystique-rose/90 hover:text-mystique-rose transition-colors"
                 >
                   <Music
                     className={`w-4 h-4 ${
@@ -460,7 +423,7 @@ export default function Prediction() {
                   </span>
                 </button>
 
-                {/* Voix de la prédiction (ElevenLabs), piloté par toggleSpeech */}
+                {/* Voix de la prédiction */}
                 <audio
                   ref={voiceAudioRef}
                   playsInline
@@ -474,8 +437,6 @@ export default function Prediction() {
                   }}
                 />
 
-                {/* Fichier d'ambiance libre de droits (public/ambiance.mp3),
-                    joué en boucle sous la voix s'il est présent */}
                 {hasAmbienceFile && (
                   <audio
                     ref={ambienceFileRef}
@@ -489,19 +450,7 @@ export default function Prediction() {
             )}
           </div>
         </motion.div>
-
       </div>
     </div>
   );
-
-  /* le reste de ton composant est inchangé,               */
-  /* seulement le bouton retour devient :                  */
-  /* ------------------------------------------------------ */
-
-  /* ------------------------------------------------------ */
-
-  /* … le JSX complet : copie-colle celui que tu avais,     */
-  /*     juste remplace <Link>/useLocation par router       */
-  /*     et supprime tout import react-router-dom           */
-  /* ------------------------------------------------------ */
 }
