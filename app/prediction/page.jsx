@@ -19,8 +19,12 @@ import { createMysticAmbience } from "@/lib/ambience";
 const SILENT_AUDIO =
   "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
 
-// Volume de l'ambiance de fond (la voix reste au premier plan).
+// Volume de la nappe synthétisée de fond (la voix reste au premier plan).
 const AMBIENCE_VOLUME = 0.18;
+// Volume du fichier d'ambiance libre de droits (public/ambiance.mp3) s'il existe.
+const AMBIENCE_FILE_VOLUME = 0.4;
+// Fichier d'ambiance optionnel : déposez un .mp3 libre de droits à cet emplacement.
+const AMBIENCE_FILE = "/ambiance.mp3";
 
 export default function Prediction() {
   const router = useRouter();
@@ -31,9 +35,18 @@ export default function Prediction() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isGeneratingVoice, setIsGeneratingVoice] = useState(false);
   const [ambienceEnabled, setAmbienceEnabled] = useState(true);
+  const [hasAmbienceFile, setHasAmbienceFile] = useState(false);
   const voiceAudioRef = useRef(null);
   const voiceUrlRef = useRef(null);
   const ambienceRef = useRef(null);
+  const ambienceFileRef = useRef(null);
+
+  // Détecte la présence d'un fichier d'ambiance libre de droits.
+  useEffect(() => {
+    fetch(AMBIENCE_FILE, { method: "HEAD" })
+      .then((r) => setHasAmbienceFile(r.ok))
+      .catch(() => setHasAmbienceFile(false));
+  }, []);
 
   const goBack = () => {
     router.push("/selection");
@@ -83,6 +96,33 @@ export default function Prediction() {
   };
 
   /* ------------------------------------------------------ */
+  /* Ambiance de fond : fichier libre de droits si présent,  */
+  /* sinon nappe mystique synthétisée. À appeler dans un     */
+  /* geste utilisateur (Safari).                             */
+  /* ------------------------------------------------------ */
+  const startSynthAmbience = () => {
+    if (!ambienceRef.current) ambienceRef.current = createMysticAmbience();
+    ambienceRef.current.prime();
+    ambienceRef.current.setVolume(AMBIENCE_VOLUME);
+  };
+
+  const startAmbience = () => {
+    if (hasAmbienceFile && ambienceFileRef.current) {
+      const a = ambienceFileRef.current;
+      a.loop = true;
+      a.volume = AMBIENCE_FILE_VOLUME;
+      if (a.paused) a.play().catch(() => startSynthAmbience());
+      return;
+    }
+    startSynthAmbience();
+  };
+
+  const stopAmbience = () => {
+    if (ambienceFileRef.current) ambienceFileRef.current.pause();
+    ambienceRef.current?.setVolume(0);
+  };
+
+  /* ------------------------------------------------------ */
   /* Lecture vocale (voix ElevenLabs) + ambiance mystique    */
   /* ------------------------------------------------------ */
   const toggleSpeech = async () => {
@@ -93,17 +133,15 @@ export default function Prediction() {
     if (isSpeaking) {
       audio.pause();
       audio.currentTime = 0;
-      ambienceRef.current?.setVolume(0);
+      stopAmbience();
       setIsSpeaking(false);
       return;
     }
     if (isGeneratingVoice || !prediction) return;
 
-    // Ambiance : on crée l'AudioContext DANS le geste utilisateur (Safari),
-    // et la nappe monte pendant que la voix se génère.
-    if (!ambienceRef.current) ambienceRef.current = createMysticAmbience();
-    ambienceRef.current.prime();
-    ambienceRef.current.setVolume(ambienceEnabled ? AMBIENCE_VOLUME : 0);
+    // Ambiance : démarrée DANS le geste utilisateur (Safari), elle habille
+    // l'attente pendant que la voix se génère.
+    if (ambienceEnabled) startAmbience();
 
     // Amorce l'élément audio de la voix DANS le geste (sinon Safari bloque le
     // play() qui suit le fetch, jugé automatique).
@@ -138,7 +176,7 @@ export default function Prediction() {
       setIsSpeaking(true);
     } catch (err) {
       console.error("Erreur voix ElevenLabs:", err);
-      ambienceRef.current?.setVolume(0);
+      stopAmbience();
     } finally {
       setIsGeneratingVoice(false);
     }
@@ -146,9 +184,10 @@ export default function Prediction() {
 
   // Coupe/rallume l'ambiance en direct pendant la lecture.
   useEffect(() => {
-    if (isSpeaking) {
-      ambienceRef.current?.setVolume(ambienceEnabled ? AMBIENCE_VOLUME : 0);
-    }
+    if (!isSpeaking) return;
+    if (ambienceEnabled) startAmbience();
+    else stopAmbience();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ambienceEnabled, isSpeaking]);
 
   useEffect(() => {
@@ -421,19 +460,31 @@ export default function Prediction() {
                   </span>
                 </button>
 
-                {/* Élément audio persistant piloté par toggleSpeech */}
+                {/* Voix de la prédiction (ElevenLabs), piloté par toggleSpeech */}
                 <audio
                   ref={voiceAudioRef}
                   playsInline
                   onEnded={() => {
                     setIsSpeaking(false);
-                    ambienceRef.current?.setVolume(0);
+                    stopAmbience();
                   }}
                   onError={() => {
                     setIsSpeaking(false);
-                    ambienceRef.current?.setVolume(0);
+                    stopAmbience();
                   }}
                 />
+
+                {/* Fichier d'ambiance libre de droits (public/ambiance.mp3),
+                    joué en boucle sous la voix s'il est présent */}
+                {hasAmbienceFile && (
+                  <audio
+                    ref={ambienceFileRef}
+                    src={AMBIENCE_FILE}
+                    loop
+                    playsInline
+                    preload="auto"
+                  />
+                )}
               </motion.div>
             )}
           </div>
