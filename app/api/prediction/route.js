@@ -33,12 +33,12 @@ Voici trois cartes de tarot tirées par une âme en quête de réponses :
 - Futur : ${cards[2]?.name} (${cards[2]?.meaning})
 
 Fais une interprétation sacrée et profonde, centrée sur le thème : ${theme || "général"}.
-Utilise un style poétique, ésotérique et intuitif. Réponds uniquement en français.
+Utilise un langage familier, courant et accessible pour faciliter la compréhension, tout en gardant ton rôle d'oracle mystique.
+Réponds uniquement en français.
 
 RÈGLES IMPORTANTES :
 - N'utilise AUCUN émoji.
-- N'utilise AUCUN astérisque (*).
-- Mets les mots les plus pertinents et forts en gras en utilisant des balises HTML <b>mot</b>.`;
+- N'utilise AUCUN astérisque (*) ni aucun formatage Markdown ou HTML. Ton texte doit être pur.`;
 
   try {
     const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
@@ -54,7 +54,7 @@ RÈGLES IMPORTANTES :
           {
             role: "system",
             content:
-              "Tu es une oracle mystique qui parle exclusivement en français, avec un ton sacré et intuitif. Tu fais des interprétations de cartes de tarot sur différents thèmes.",
+              "Tu es une oracle mystique qui parle exclusivement en français, avec un langage familier, courant et facile à comprendre. Tu fais des interprétations de cartes de tarot.",
           },
           { role: "user", content: prompt },
         ],

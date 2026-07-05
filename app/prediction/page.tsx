@@ -34,6 +34,8 @@ export default function Prediction() {
   const [isGeneratingVoice, setIsGeneratingVoice] = useState(false);
   const [ambienceEnabled, setAmbienceEnabled] = useState(true);
   const [hasAmbienceFile, setHasAmbienceFile] = useState(false);
+  const [timings, setTimings] = useState<any>(null);
+  const [activeWordRange, setActiveWordRange] = useState({ start: -1, end: -1 });
   const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
   const voiceUrlRef = useRef<string | null>(null);
   const ambienceRef = useRef<any>(null);
@@ -145,12 +147,22 @@ export default function Prediction() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: prediction.replace(/<[^>]*>?/gm, '').replace(/[*#_]/g, "") }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || `Erreur ${res.status}`);
       }
 
-      const blob = await res.blob();
+      if (data.alignment) setTimings(data.alignment);
+
+      const audioBase64 = data.audio_base64;
+      const binaryString = atob(audioBase64);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "audio/mpeg" });
+
       if (voiceUrlRef.current) URL.revokeObjectURL(voiceUrlRef.current);
       const url = URL.createObjectURL(blob);
       voiceUrlRef.current = url;
@@ -171,8 +183,17 @@ export default function Prediction() {
         const voices = window.speechSynthesis.getVoices();
         const frenchVoice = voices.find(v => v.lang.startsWith("fr") && (v.name.includes("Female") || v.name.includes("Google")));
         if (frenchVoice) utterance.voice = frenchVoice;
+        
+        utterance.onboundary = (event) => {
+          if (event.name === "word") {
+            setActiveCharIndex(event.charIndex, cleanText);
+          }
+        };
 
-        utterance.onend = () => setIsSpeaking(false);
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          setActiveWordRange({ start: -1, end: -1 });
+        };
         window.speechSynthesis.speak(utterance);
         setIsSpeaking(true);
       }
@@ -180,6 +201,50 @@ export default function Prediction() {
       setIsGeneratingVoice(false);
     }
   };
+
+  const setActiveCharIndex = (charIndex: number, text: string) => {
+    let start = charIndex;
+    let end = charIndex;
+    while (start > 0 && text[start - 1] !== ' ' && text[start - 1] !== '\n') start--;
+    while (end < text.length - 1 && text[end + 1] !== ' ' && text[end + 1] !== '\n') end++;
+    setActiveWordRange({ start, end });
+  };
+
+  useEffect(() => {
+    let animationFrameId: number;
+    const checkAudioTime = () => {
+      if (voiceAudioRef.current && isSpeaking && timings) {
+        const currentTime = voiceAudioRef.current.currentTime;
+        const startTimes = timings.character_start_times_seconds;
+        
+        let foundIndex = -1;
+        for (let i = 0; i < startTimes.length; i++) {
+          if (currentTime >= startTimes[i]) foundIndex = i;
+          else break;
+        }
+        
+        if (foundIndex !== -1) {
+          const chars = timings.characters;
+          let start = foundIndex;
+          let end = foundIndex;
+          while (start > 0 && chars[start - 1] !== ' ' && chars[start - 1] !== '\n') start--;
+          while (end < chars.length - 1 && chars[end + 1] !== ' ' && chars[end + 1] !== '\n') end++;
+          setActiveWordRange({ start, end });
+        }
+      }
+      if (isSpeaking) animationFrameId = requestAnimationFrame(checkAudioTime);
+    };
+    
+    if (isSpeaking && timings) {
+      animationFrameId = requestAnimationFrame(checkAudioTime);
+    } else if (!isSpeaking) {
+      setActiveWordRange({ start: -1, end: -1 });
+    }
+    
+    return () => {
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+    };
+  }, [isSpeaking, timings]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -392,19 +457,19 @@ export default function Prediction() {
                 transition={{ duration: 1.5 }}
                 className="prose prose-lg max-w-none"
               >
-                <div 
-                  className="text-mystique-rose/90 font-elegant leading-relaxed text-lg whitespace-pre-line [&>b]:font-bold [&>b]:text-mystique-gold [&>b]:drop-shadow-glow"
-                  dangerouslySetInnerHTML={{ 
-                    __html: prediction
-                      .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
-                      .replace(/\*(.*?)\*/g, '<b>$1</b>')
-                      .replace(/&lt;b&gt;/g, '<b>')
-                      .replace(/&lt;\/b&gt;/g, '</b>')
-                      .replace(/<b>(.*?)<\/b>/g, '<b>$1</b>')
-                      .replace(/\*/g, '')
-                      .replace(/\n/g, '<br/>')
-                  }}
-                />
+                <div className="text-mystique-rose/90 font-elegant leading-relaxed text-lg whitespace-pre-wrap">
+                  {activeWordRange.start !== -1 ? (
+                    <>
+                      {prediction.replace(/<[^>]*>?/gm, '').replace(/[*#_]/g, "").substring(0, activeWordRange.start)}
+                      <span className="bg-mystique-rose/30 text-white rounded px-1 drop-shadow-glow transition-colors duration-200">
+                        {prediction.replace(/<[^>]*>?/gm, '').replace(/[*#_]/g, "").substring(activeWordRange.start, activeWordRange.end + 1)}
+                      </span>
+                      {prediction.replace(/<[^>]*>?/gm, '').replace(/[*#_]/g, "").substring(activeWordRange.end + 1)}
+                    </>
+                  ) : (
+                    prediction.replace(/<[^>]*>?/gm, '').replace(/[*#_]/g, "")
+                  )}
+                </div>
 
                 {/* Lecture vocale */}
                 <motion.button

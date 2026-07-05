@@ -30,13 +30,13 @@ export async function POST(request) {
 
   try {
     const res = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/with-timestamps`,
       {
         method: "POST",
         headers: {
           "xi-api-key": apiKey,
           "Content-Type": "application/json",
-          Accept: "audio/mpeg",
+          Accept: "application/json",
         },
         body: JSON.stringify({
           // Garde-fou : limite la consommation du quota gratuit.
@@ -62,11 +62,10 @@ export async function POST(request) {
       );
     }
 
-    const audio = await res.arrayBuffer();
-    return new NextResponse(audio, {
+    const data = await res.json();
+    return NextResponse.json(data, {
       status: 200,
       headers: {
-        "Content-Type": "audio/mpeg",
         "Cache-Control": "no-store",
       },
     });
