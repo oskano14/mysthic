@@ -29,6 +29,7 @@ export default function Prediction() {
   const [selectedCards, setSelectedCards] = useState<any[]>([]);
   const [theme, setTheme] = useState("général");
   const [prediction, setPrediction] = useState("");
+  const [mood, setMood] = useState("mystique");
   const [isLoadingPrediction, setIsLoadingPrediction] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isGeneratingVoice, setIsGeneratingVoice] = useState(false);
@@ -80,8 +81,8 @@ export default function Prediction() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || `Erreur ${res.status}`);
 
-      interpretationText = data.prediction;
-      setPrediction(interpretationText);
+      setPrediction(data.prediction);
+      setMood(data.mood || "mystique");
     } catch (err) {
       console.error("Erreur Mistral:", err);
       setPrediction("Une erreur ésotérique a bloqué la prophétie.");
@@ -91,7 +92,7 @@ export default function Prediction() {
 
   const startSynthAmbience = () => {
     if (!ambienceRef.current) {
-      ambienceRef.current = createMysticAmbience(selectedCards, theme);
+      ambienceRef.current = createMysticAmbience(selectedCards, theme, mood);
     }
     ambienceRef.current.prime();
     ambienceRef.current.setVolume(AMBIENCE_VOLUME);
@@ -128,6 +129,13 @@ export default function Prediction() {
       return;
     }
     if (isGeneratingVoice || !prediction) return;
+    
+    // Prime speech synthesis SYNCHRONOUSLY on mobile before any await
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      const primeUtterance = new SpeechSynthesisUtterance("");
+      primeUtterance.volume = 0;
+      window.speechSynthesis.speak(primeUtterance);
+    }
 
     if (ambienceEnabled) startAmbience();
 

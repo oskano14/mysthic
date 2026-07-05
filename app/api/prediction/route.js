@@ -38,7 +38,12 @@ Réponds uniquement en français.
 
 RÈGLES IMPORTANTES :
 - N'utilise AUCUN émoji.
-- N'utilise AUCUN astérisque (*) ni aucun formatage Markdown ou HTML. Ton texte doit être pur.`;
+- N'utilise AUCUN astérisque (*) ni aucun formatage Markdown ou HTML. Ton texte doit être pur.
+- Tu dois ABSOLUMENT répondre au format JSON valide avec la structure exacte suivante :
+{
+  "prediction": "ton texte d'interprétation ici",
+  "mood": "calme" // choisis parmi : "calme", "sombre", "espoir", "tension", "mystique"
+}`;
 
   try {
     const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
@@ -58,6 +63,7 @@ RÈGLES IMPORTANTES :
           },
           { role: "user", content: prompt },
         ],
+        response_format: { type: "json_object" },
       }),
     });
 
@@ -71,15 +77,27 @@ RÈGLES IMPORTANTES :
     }
 
     const data = await res.json();
-    const prediction = data?.choices?.[0]?.message?.content;
-    if (!prediction) {
+    const rawPrediction = data?.choices?.[0]?.message?.content;
+    
+    if (!rawPrediction) {
       return NextResponse.json(
         { error: "Réponse mystique vide." },
         { status: 502 }
       );
     }
+    
+    let parsedContent;
+    try {
+      parsedContent = JSON.parse(rawPrediction);
+    } catch {
+      // Fallback in case Mistral didn't return perfect JSON despite the flag
+      parsedContent = { prediction: rawPrediction, mood: "mystique" };
+    }
 
-    return NextResponse.json({ prediction });
+    return NextResponse.json({ 
+      prediction: parsedContent.prediction || rawPrediction,
+      mood: parsedContent.mood || "mystique"
+    });
   } catch (err) {
     console.error("Erreur Mistral:", err);
     return NextResponse.json(
