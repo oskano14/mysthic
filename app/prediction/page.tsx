@@ -37,6 +37,7 @@ export default function Prediction() {
   const [hasAmbienceFile, setHasAmbienceFile] = useState(false);
   const [timings, setTimings] = useState<any>(null);
   const [activeWordRange, setActiveWordRange] = useState({ start: -1, end: -1 });
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
   const voiceUrlRef = useRef<string | null>(null);
   const ambienceRef = useRef<any>(null);
@@ -49,7 +50,11 @@ export default function Prediction() {
   }, []);
 
   const goBack = () => {
-    router.push("/selection");
+    if (isSpeaking) {
+      setShowExitConfirm(true);
+    } else {
+      router.push("/selection");
+    }
   };
 
   useEffect(() => {
@@ -556,6 +561,68 @@ export default function Prediction() {
           </div>
         </motion.div>
       </div>
+
+      {/* Modal de confirmation d'arrêt de lecture */}
+      <AnimatePresence>
+        {showExitConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowExitConfirm(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-black/90 border border-mystique-rose/30 p-6 md:p-8 rounded-2xl md:rounded-3xl shadow-2xl max-w-md w-full overflow-hidden"
+            >
+              <div className="absolute inset-0 opacity-20 pointer-events-none">
+                <GLSLHills />
+              </div>
+              <div className="relative z-10">
+                <h3 className="text-xl md:text-2xl font-bold text-mystique-rose font-mystique mb-4 text-center">
+                  L&apos;Oracle parle
+                </h3>
+                <p className="text-white/80 font-elegant text-center mb-8">
+                  Une lecture est en cours. Souhaitez-vous l&apos;interrompre avant de revenir à la sélection ?
+                </p>
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => {
+                      if (voiceAudioRef.current) voiceAudioRef.current.pause();
+                      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+                        window.speechSynthesis.cancel();
+                      }
+                      setIsSpeaking(false);
+                      router.push("/selection");
+                    }}
+                    className="px-6 py-3 bg-mystique-rose text-black font-bold font-elegant rounded-xl hover:bg-mystique-gold hover:scale-105 transition-all duration-300"
+                  >
+                    Arrêter la voix et quitter
+                  </button>
+                  <button
+                    onClick={() => {
+                      router.push("/selection");
+                    }}
+                    className="px-6 py-3 bg-white/10 text-white font-elegant rounded-xl hover:bg-white/20 transition-colors"
+                  >
+                    Laisser parler et quitter
+                  </button>
+                  <button
+                    onClick={() => setShowExitConfirm(false)}
+                    className="px-6 py-3 text-white/60 font-elegant hover:text-white transition-colors"
+                  >
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
