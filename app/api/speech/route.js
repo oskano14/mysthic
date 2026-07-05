@@ -24,9 +24,9 @@ export async function POST(request) {
     );
   }
 
-  // Voix "Sarah" par défaut (mature, rassurante, posée).
+  // Voix "Charlotte" par défaut (mystique, mature, parfaite en français).
   // Modifiable via la variable ELEVENLABS_VOICE_ID.
-  const voiceId = process.env.ELEVENLABS_VOICE_ID || "EXAVITQu4vr4xnSDxMaL";
+  const voiceId = process.env.ELEVENLABS_VOICE_ID || "XB0fDUnXU5pow0Jex86P";
 
   try {
     const res = await fetch(

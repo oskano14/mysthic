@@ -88,7 +88,9 @@ export default function Prediction() {
   };
 
   const startSynthAmbience = () => {
-    if (!ambienceRef.current) ambienceRef.current = createMysticAmbience();
+    if (!ambienceRef.current) {
+      ambienceRef.current = createMysticAmbience(selectedCards, theme);
+    }
     ambienceRef.current.prime();
     ambienceRef.current.setVolume(AMBIENCE_VOLUME);
   };
@@ -370,9 +372,10 @@ export default function Prediction() {
                 transition={{ duration: 1.5 }}
                 className="prose prose-lg max-w-none"
               >
-                <div className="text-mystique-rose/90 font-elegant leading-relaxed text-lg whitespace-pre-line">
-                  {prediction}
-                </div>
+                <div 
+                  className="text-mystique-rose/90 font-elegant leading-relaxed text-lg whitespace-pre-line [&>b]:font-bold [&>b]:text-mystique-gold [&>b]:drop-shadow-glow"
+                  dangerouslySetInnerHTML={{ __html: prediction.replace(/\n/g, '<br/>') }}
+                />
 
                 {/* Lecture vocale */}
                 <motion.button

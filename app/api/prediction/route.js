@@ -32,8 +32,13 @@ Voici trois cartes de tarot tirées par une âme en quête de réponses :
 - Présent : ${cards[1]?.name} (${cards[1]?.meaning})
 - Futur : ${cards[2]?.name} (${cards[2]?.meaning})
 
-Fais une interprétation sacrée et profonde, **centrée sur le thème : ${theme || "général"}**.
-Utilise un style poétique, ésotérique et intuitif. Réponds uniquement en **français**.`;
+Fais une interprétation sacrée et profonde, centrée sur le thème : ${theme || "général"}.
+Utilise un style poétique, ésotérique et intuitif. Réponds uniquement en français.
+
+RÈGLES IMPORTANTES :
+- N'utilise AUCUN émoji.
+- N'utilise AUCUN astérisque (*).
+- Mets les mots les plus pertinents et forts en gras en utilisant des balises HTML <b>mot</b>.`;
 
   try {
     const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
