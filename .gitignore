@@ -24,11 +24,6 @@
 .DS_Store
 *.pem
 
-# assets TTS générés (copiés depuis node_modules au postinstall)
-/public/vendor
-# page de test TTS temporaire
-/public/_ttstest.html
-
 # debug
 npm-debug.log*
 yarn-debug.log*
