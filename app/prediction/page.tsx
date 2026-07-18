@@ -43,6 +43,11 @@ export default function Prediction() {
   const voiceUrlRef = useRef<string | null>(null);
   const ambienceRef = useRef<any>(null);
   const ambienceFileRef = useRef<HTMLAudioElement | null>(null);
+  // Streaming de la voix (lecture phrase par phrase)
+  const isStreamingRef = useRef(false);
+  const cancelSpeakRef = useRef(false);
+  const chunkOffsetRef = useRef(0);
+  const endResolverRef = useRef<null | (() => void)>(null);
 
   useEffect(() => {
     fetch(AMBIENCE_FILE, { method: "HEAD" })
@@ -125,12 +130,19 @@ export default function Prediction() {
     if (!audio) return;
 
     if (isSpeaking) {
-      audio.pause();
+      cancelSpeakRef.current = true;
+      isStreamingRef.current = false;
       audio.pause();
       audio.currentTime = 0;
+      // Débloque la boucle de streaming si elle attend la fin d'une phrase.
+      if (endResolverRef.current) {
+        endResolverRef.current();
+        endResolverRef.current = null;
+      }
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
       }
+      stopAmbience();
       setIsSpeaking(false);
       return;
     }
@@ -158,7 +170,25 @@ export default function Prediction() {
       .replace(/<[^>]*>?/gm, "")
       .replace(/[*#_]/g, "");
 
+    // Lit un blob audio et se résout à la fin (ou à l'annulation).
+    const playChunkAndWait = (blob: Blob) =>
+      new Promise<void>((resolve) => {
+        const onEnd = () => {
+          audio.removeEventListener("ended", onEnd);
+          if (endResolverRef.current === resolve) endResolverRef.current = null;
+          resolve();
+        };
+        endResolverRef.current = resolve;
+        audio.addEventListener("ended", onEnd);
+        if (voiceUrlRef.current) URL.revokeObjectURL(voiceUrlRef.current);
+        const url = URL.createObjectURL(blob);
+        voiceUrlRef.current = url;
+        audio.src = url;
+        audio.play().catch(() => onEnd());
+      });
+
     const playBlob = async (blob: Blob, alignment: any) => {
+      chunkOffsetRef.current = 0;
       if (alignment) setTimings(alignment);
       if (voiceUrlRef.current) URL.revokeObjectURL(voiceUrlRef.current);
       const url = URL.createObjectURL(blob);
@@ -168,77 +198,82 @@ export default function Prediction() {
       setIsSpeaking(true);
     };
 
+    cancelSpeakRef.current = false;
+    let playedAny = false;
     setIsGeneratingVoice(true);
     try {
-      // 1) Moteur principal : Kokoro (le moteur de voicebox) 100 % dans le
-      //    navigateur, sur l'appareil du visiteur — aucune dépendance externe.
-      try {
-        const { synthesizeFR } = await import("@/lib/tts-browser");
-        const { blob, alignment } = await synthesizeFR(cleanText, {
-          onProgress: (p: any) => {
-            if (p?.status === "progress" && p?.total) {
-              const pct = Math.min(
-                100,
-                Math.round((p.loaded / p.total) * 100)
-              );
-              setVoiceStatus(`Préparation de la voix… ${pct}%`);
-            }
-          },
-        });
-        setVoiceStatus("");
-        await playBlob(blob, alignment);
-        return;
-      } catch (kokoroErr) {
-        console.warn("Kokoro (navigateur) indisponible, secours :", kokoroErr);
-        setVoiceStatus("");
+      // Moteur UNIQUE : Kokoro (le moteur de voicebox) 100 % dans le navigateur.
+      // Synthèse STREAMÉE : on lit chaque phrase dès qu'elle est prête pendant
+      // que la suivante se génère en arrière-plan.
+      const { streamSentencesFR } = await import("@/lib/tts-browser");
+      const gen = streamSentencesFR(cleanText, {
+        onProgress: (p: any) => {
+          if (p?.status === "progress" && p?.total) {
+            const pct = Math.min(100, Math.round((p.loaded / p.total) * 100));
+            setVoiceStatus(`Préparation de la voix… ${pct}%`);
+          }
+        },
+      });
+
+      isStreamingRef.current = true;
+      let res = await gen.next(); // 1re phrase (déclenche le téléchargement du modèle)
+      setVoiceStatus("");
+      if (!res.done) {
+        setIsGeneratingVoice(false); // la voix démarre, on retire le spinner
+        setIsSpeaking(true);
+        let nextP = gen.next(); // pré-génère la phrase suivante pendant la lecture
+        while (!res.done && !cancelSpeakRef.current) {
+          const chunk: any = res.value;
+          chunkOffsetRef.current = chunk.start;
+          setTimings(chunk.alignment);
+          await playChunkAndWait(chunk.blob);
+          playedAny = true;
+          if (cancelSpeakRef.current) break;
+          res = await nextP;
+          if (!res.done) nextP = gen.next();
+        }
       }
 
-      // 2) Secours cloud OPTIONNEL (ElevenLabs/Google) si des clés existent.
-      const res = await fetch("/api/speech", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: cleanText }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || `Erreur ${res.status}`);
-
-      const binaryString = atob(data.audio_base64);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
-      await playBlob(
-        new Blob([bytes], { type: data.mime || "audio/mpeg" }),
-        data.alignment
-      );
+      isStreamingRef.current = false;
+      if (!cancelSpeakRef.current) {
+        setIsSpeaking(false);
+        stopAmbience();
+      }
     } catch (err) {
-      console.error("Voix indisponible, bascule sur la voix système :", err);
-      // 3) Dernier recours : voix système du navigateur (Web Speech API).
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        const utterance = new SpeechSynthesisUtterance(cleanText);
-        utterance.lang = "fr-FR";
-        utterance.pitch = 0.8;
-        utterance.rate = 0.9;
-
-        const voices = window.speechSynthesis.getVoices();
-        const frenchVoice = voices.find(
-          (v) =>
-            v.lang.startsWith("fr") &&
-            (v.name.includes("Female") || v.name.includes("Google"))
-        );
-        if (frenchVoice) utterance.voice = frenchVoice;
-
-        utterance.onboundary = (event) => {
-          if (event.name === "word") {
-            setActiveCharIndex(event.charIndex, cleanText);
-          }
-        };
-
-        utterance.onend = () => {
-          setIsSpeaking(false);
-          setActiveWordRange({ start: -1, end: -1 });
-        };
-        window.speechSynthesis.speak(utterance);
-        setIsSpeaking(true);
+      isStreamingRef.current = false;
+      console.error("Voix Kokoro indisponible :", err);
+      setVoiceStatus("");
+      // On n'enchaîne JAMAIS une autre voix si Kokoro a déjà parlé (ou si l'on a
+      // annulé) : cela évite de superposer deux voix.
+      if (!playedAny && !cancelSpeakRef.current) {
+        // Dernier recours uniquement (Kokoro totalement indisponible) :
+        // voix système du navigateur.
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          chunkOffsetRef.current = 0;
+          const utterance = new SpeechSynthesisUtterance(cleanText);
+          utterance.lang = "fr-FR";
+          utterance.pitch = 0.8;
+          utterance.rate = 0.9;
+          const voices = window.speechSynthesis.getVoices();
+          const frenchVoice = voices.find((v) => v.lang.startsWith("fr"));
+          if (frenchVoice) utterance.voice = frenchVoice;
+          utterance.onboundary = (event) => {
+            if (event.name === "word")
+              setActiveCharIndex(event.charIndex, cleanText);
+          };
+          utterance.onend = () => {
+            setIsSpeaking(false);
+            setActiveWordRange({ start: -1, end: -1 });
+            stopAmbience();
+          };
+          window.speechSynthesis.speak(utterance);
+          setIsSpeaking(true);
+        } else {
+          stopAmbience();
+        }
+      } else {
+        setIsSpeaking(false);
+        stopAmbience();
       }
     } finally {
       setVoiceStatus("");
@@ -273,7 +308,9 @@ export default function Prediction() {
           let end = foundIndex;
           while (start > 0 && chars[start - 1] !== ' ' && chars[start - 1] !== '\n') start--;
           while (end < chars.length - 1 && chars[end + 1] !== ' ' && chars[end + 1] !== '\n') end++;
-          setActiveWordRange({ start, end });
+          // Décalage de la phrase courante dans le texte complet (streaming).
+          const off = chunkOffsetRef.current;
+          setActiveWordRange({ start: start + off, end: end + off });
         }
       }
       if (isSpeaking) animationFrameId = requestAnimationFrame(checkAudioTime);
@@ -290,14 +327,14 @@ export default function Prediction() {
     };
   }, [isSpeaking, timings]);
 
+  // La musique de fond suit la LECTURE : elle démarre au clic sur « Écouter »
+  // (dans toggleSpeech), pas au chargement de la prédiction. Ici on ne fait que
+  // réagir au bouton d'ambiance pendant la lecture.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (ambienceEnabled && prediction) {
-      startAmbience();
-    } else {
-      stopAmbience();
-    }
-  }, [ambienceEnabled, prediction]);
+    if (!ambienceEnabled) stopAmbience();
+    else if (isSpeaking) startAmbience();
+  }, [ambienceEnabled, isSpeaking]);
 
   useEffect(() => {
     const audioNode = voiceAudioRef.current;
@@ -569,10 +606,13 @@ export default function Prediction() {
                   ref={voiceAudioRef}
                   playsInline
                   onEnded={() => {
+                    // En streaming, la boucle gère l'enchaînement des phrases.
+                    if (isStreamingRef.current) return;
                     setIsSpeaking(false);
                     stopAmbience();
                   }}
                   onError={() => {
+                    if (isStreamingRef.current) return;
                     setIsSpeaking(false);
                     stopAmbience();
                   }}
@@ -623,6 +663,12 @@ export default function Prediction() {
                 <div className="flex flex-col gap-3">
                   <button
                     onClick={() => {
+                      cancelSpeakRef.current = true;
+                      isStreamingRef.current = false;
+                      if (endResolverRef.current) {
+                        endResolverRef.current();
+                        endResolverRef.current = null;
+                      }
                       if (voiceAudioRef.current) voiceAudioRef.current.pause();
                       if (typeof window !== "undefined" && "speechSynthesis" in window) {
                         window.speechSynthesis.cancel();
