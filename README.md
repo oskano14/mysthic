@@ -1,6 +1,6 @@
 # 🔮 mystic Tarot
 
-**mystic Tarot** est une application de tirage divinatoire interactif. Elle permet à l'utilisateur de tirer trois cartes de tarot (passé, présent, futur) et d'obtenir une interprétation générée automatiquement par une intelligence artificielle.
+**mystic Tarot** est une application de tirage divinatoire interactif. Elle permet à l'utilisateur de tirer trois cartes de tarot (passé, présent, futur) et d'obtenir une interprétation générée automatiquement par une intelligence artificielle. appli dispo : https://mysthic.vercel.app
 
 ---
 
