@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 
+// NOTE : le moteur TTS principal (Kokoro/voicebox) tourne désormais dans le
+// navigateur, côté client (voir lib/tts-browser.js). Cette route ne sert plus
+// que de secours cloud OPTIONNEL, uniquement si des clés API sont configurées.
+// Elle reste volontairement légère (aucun modèle, aucune dépendance lourde)
+// pour rester compatible avec les fonctions serverless de Vercel.
+
 async function generateElevenLabs(text, apiKey) {
   const voiceId = process.env.ELEVENLABS_VOICE_ID || "XB0fDUnXU5pow0Jex86P";
   const res = await fetch(
@@ -70,7 +76,7 @@ async function generateGoogleTTS(text, apiKey) {
   // Convertir les timepoints (mots) en un tableau d'alignement au format ElevenLabs (caractères)
   const character_start_times_seconds = new Array(text.length).fill(-1);
   let lastTime = 0;
-  
+
   if (data.timepoints) {
     for (const pt of data.timepoints) {
       const idx = parseInt(pt.markName, 10);
@@ -79,7 +85,7 @@ async function generateGoogleTTS(text, apiKey) {
       }
     }
   }
-  
+
   for (let i = 0; i < text.length; i++) {
     if (character_start_times_seconds[i] !== -1) {
       lastTime = character_start_times_seconds[i];
@@ -92,8 +98,8 @@ async function generateGoogleTTS(text, apiKey) {
     audio_base64: data.audioContent,
     alignment: {
       characters: text.split(""),
-      character_start_times_seconds
-    }
+      character_start_times_seconds,
+    },
   };
 }
 
@@ -110,7 +116,7 @@ export async function POST(request) {
     return NextResponse.json({ error: "Le texte à lire est requis." }, { status: 400 });
   }
 
-  // Option 1 : ElevenLabs (Par défaut)
+  // Secours 1 : ElevenLabs (seulement si une clé est fournie)
   if (process.env.ELEVENLABS_API_KEY) {
     try {
       const data = await generateElevenLabs(text, process.env.ELEVENLABS_API_KEY);
@@ -120,7 +126,7 @@ export async function POST(request) {
     }
   }
 
-  // Option 2 : Google Cloud TTS (Secours 1)
+  // Secours 2 : Google Cloud TTS (seulement si une clé est fournie)
   if (process.env.GOOGLE_TTS_API_KEY) {
     try {
       const data = await generateGoogleTTS(text, process.env.GOOGLE_TTS_API_KEY);
@@ -130,10 +136,9 @@ export async function POST(request) {
     }
   }
 
-  // Option 3 : Déclenchement du Fallback Local (Secours 2 via le navigateur)
-  // En renvoyant un 502, le front-end basculera sur window.speechSynthesis
+  // Secours 3 : basculement sur la voix système du navigateur (via un 502)
   return NextResponse.json(
-    { error: "Toutes les API vocales ont échoué. Basculement sur la voix système." },
+    { error: "Aucun secours cloud configuré. Basculement sur la voix système." },
     { status: 502 }
   );
 }

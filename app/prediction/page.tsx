@@ -33,6 +33,7 @@ export default function Prediction() {
   const [isLoadingPrediction, setIsLoadingPrediction] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isGeneratingVoice, setIsGeneratingVoice] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState("");
   const [ambienceEnabled, setAmbienceEnabled] = useState(true);
   const [hasAmbienceFile, setHasAmbienceFile] = useState(false);
   const [timings, setTimings] = useState<any>(null);
@@ -153,50 +154,79 @@ export default function Prediction() {
       // Ignore
     }
 
-    setIsGeneratingVoice(true);
-    try {
-      const res = await fetch("/api/speech", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: prediction.replace(/<[^>]*>?/gm, '').replace(/[*#_]/g, "") }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.error || `Erreur ${res.status}`);
-      }
+    const cleanText = prediction
+      .replace(/<[^>]*>?/gm, "")
+      .replace(/[*#_]/g, "");
 
-      if (data.alignment) setTimings(data.alignment);
-
-      const audioBase64 = data.audio_base64;
-      const binaryString = atob(audioBase64);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const blob = new Blob([bytes], { type: "audio/mpeg" });
-
+    const playBlob = async (blob: Blob, alignment: any) => {
+      if (alignment) setTimings(alignment);
       if (voiceUrlRef.current) URL.revokeObjectURL(voiceUrlRef.current);
       const url = URL.createObjectURL(blob);
       voiceUrlRef.current = url;
-
       audio.src = url;
       await audio.play();
       setIsSpeaking(true);
+    };
+
+    setIsGeneratingVoice(true);
+    try {
+      // 1) Moteur principal : Kokoro (le moteur de voicebox) 100 % dans le
+      //    navigateur, sur l'appareil du visiteur — aucune dépendance externe.
+      try {
+        const { synthesizeFR } = await import("@/lib/tts-browser");
+        const { blob, alignment } = await synthesizeFR(cleanText, {
+          onProgress: (p: any) => {
+            if (p?.status === "progress" && p?.total) {
+              const pct = Math.min(
+                100,
+                Math.round((p.loaded / p.total) * 100)
+              );
+              setVoiceStatus(`Préparation de la voix… ${pct}%`);
+            }
+          },
+        });
+        setVoiceStatus("");
+        await playBlob(blob, alignment);
+        return;
+      } catch (kokoroErr) {
+        console.warn("Kokoro (navigateur) indisponible, secours :", kokoroErr);
+        setVoiceStatus("");
+      }
+
+      // 2) Secours cloud OPTIONNEL (ElevenLabs/Google) si des clés existent.
+      const res = await fetch("/api/speech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: cleanText }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Erreur ${res.status}`);
+
+      const binaryString = atob(data.audio_base64);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
+      await playBlob(
+        new Blob([bytes], { type: data.mime || "audio/mpeg" }),
+        data.alignment
+      );
     } catch (err) {
-      console.error("Erreur voix ElevenLabs:", err);
-      // Fallback: Web Speech API (Voix système)
+      console.error("Voix indisponible, bascule sur la voix système :", err);
+      // 3) Dernier recours : voix système du navigateur (Web Speech API).
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        const cleanText = prediction.replace(/<[^>]*>?/gm, '').replace(/[*#_]/g, "");
         const utterance = new SpeechSynthesisUtterance(cleanText);
         utterance.lang = "fr-FR";
         utterance.pitch = 0.8;
         utterance.rate = 0.9;
-        
+
         const voices = window.speechSynthesis.getVoices();
-        const frenchVoice = voices.find(v => v.lang.startsWith("fr") && (v.name.includes("Female") || v.name.includes("Google")));
+        const frenchVoice = voices.find(
+          (v) =>
+            v.lang.startsWith("fr") &&
+            (v.name.includes("Female") || v.name.includes("Google"))
+        );
         if (frenchVoice) utterance.voice = frenchVoice;
-        
+
         utterance.onboundary = (event) => {
           if (event.name === "word") {
             setActiveCharIndex(event.charIndex, cleanText);
@@ -211,6 +241,7 @@ export default function Prediction() {
         setIsSpeaking(true);
       }
     } finally {
+      setVoiceStatus("");
       setIsGeneratingVoice(false);
     }
   };
@@ -496,7 +527,7 @@ export default function Prediction() {
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
                       <span className="font-elegant tracking-wide">
-                        Invocation de la voix mystique...
+                        {voiceStatus || "Invocation de la voix mystique..."}
                       </span>
                     </>
                   ) : isSpeaking ? (
