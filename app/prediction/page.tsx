@@ -41,6 +41,37 @@ export default function Prediction() {
   const voiceUrlRef = useRef<string | null>(null);
   const ambienceRef = useRef<any>(null);
   const ambienceFileRef = useRef<HTMLAudioElement | null>(null);
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
+
+  // Précharge la liste des voix système (getVoices() est vide au 1er appel :
+  // les voix arrivent en asynchrone via l'évènement voiceschanged).
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const load = () => {
+      voicesRef.current = window.speechSynthesis.getVoices() || [];
+    };
+    load();
+    window.speechSynthesis.addEventListener?.("voiceschanged", load);
+    return () =>
+      window.speechSynthesis.removeEventListener?.("voiceschanged", load);
+  }, []);
+
+  // Choisit une voix française féminine parmi les voix système si dispo.
+  const pickFrenchFemaleVoice = () => {
+    const voices =
+      voicesRef.current.length > 0
+        ? voicesRef.current
+        : typeof window !== "undefined" && "speechSynthesis" in window
+        ? window.speechSynthesis.getVoices()
+        : [];
+    const fr = voices.filter(
+      (v) => v.lang && v.lang.toLowerCase().startsWith("fr")
+    );
+    if (fr.length === 0) return null;
+    const female =
+      /(f[ée]m|female|am[ée]lie|audrey|aur[ée]lie|marie|julie|virginie|c[ée]line|charlotte|l[ée]a|manon|flo|google\s*fran)/i;
+    return fr.find((v) => female.test(v.name)) || fr[0];
+  };
 
   const goBack = () => {
     if (isSpeaking) {
@@ -194,15 +225,7 @@ export default function Prediction() {
         utterance.pitch = 1.0;
         utterance.rate = 0.95;
 
-        const voices = window.speechSynthesis.getVoices();
-        const frenchFemale =
-          voices.find(
-            (v) =>
-              v.lang.startsWith("fr") &&
-              /female|femme|Amélie|Amelie|Audrey|Aurélie|Aurelie|Marie|Julie|Virginie|Google/i.test(
-                v.name
-              )
-          ) || voices.find((v) => v.lang.startsWith("fr"));
+        const frenchFemale = pickFrenchFemaleVoice();
         if (frenchFemale) utterance.voice = frenchFemale;
 
         utterance.onboundary = (event) => {
