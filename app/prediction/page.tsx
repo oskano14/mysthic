@@ -34,7 +34,6 @@ export default function Prediction() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isGeneratingVoice, setIsGeneratingVoice] = useState(false);
   const [ambienceEnabled, setAmbienceEnabled] = useState(true);
-  const [hasAmbienceFile, setHasAmbienceFile] = useState(false);
   const [timings, setTimings] = useState<any>(null);
   const [activeWordRange, setActiveWordRange] = useState({ start: -1, end: -1 });
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -42,12 +41,6 @@ export default function Prediction() {
   const voiceUrlRef = useRef<string | null>(null);
   const ambienceRef = useRef<any>(null);
   const ambienceFileRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    fetch(AMBIENCE_FILE, { method: "HEAD" })
-      .then((r) => setHasAmbienceFile(r.ok))
-      .catch(() => setHasAmbienceFile(false));
-  }, []);
 
   const goBack = () => {
     if (isSpeaking) {
@@ -104,11 +97,13 @@ export default function Prediction() {
   };
 
   const startAmbience = () => {
-    if (hasAmbienceFile && ambienceFileRef.current) {
-      const a = ambienceFileRef.current;
+    const a = ambienceFileRef.current;
+    if (a) {
       a.loop = true;
       a.volume = AMBIENCE_FILE_VOLUME;
-      if (a.paused) a.play().catch(() => startSynthAmbience());
+      // On (re)lance systématiquement : si le fichier échoue, repli sur la
+      // nappe synthétisée.
+      a.play().catch(() => startSynthAmbience());
       return;
     }
     startSynthAmbience();
@@ -135,15 +130,21 @@ export default function Prediction() {
     }
     if (isGeneratingVoice || !prediction) return;
 
-    // Amorce la synthèse vocale système SYNCHRONEMENT (déblocage mobile).
+    // Coupe toute voix système résiduelle d'une tentative précédente
+    // (empêche la superposition de deux voix).
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    // La musique de fond démarre en TOUT PREMIER, sur le geste utilisateur frais.
+    if (ambienceEnabled) startAmbience();
+
+    // Amorce la synthèse système (déblocage mobile) pour le secours éventuel.
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       const primeUtterance = new SpeechSynthesisUtterance("");
       primeUtterance.volume = 0;
       window.speechSynthesis.speak(primeUtterance);
     }
-
-    // La musique de fond démarre au clic sur « Écouter ».
-    if (ambienceEnabled) startAmbience();
 
     // Déblocage de l'élément <audio> pour l'autoplay (iOS/Safari).
     try {
@@ -556,15 +557,13 @@ export default function Prediction() {
                   }}
                 />
 
-                {hasAmbienceFile && (
-                  <audio
-                    ref={ambienceFileRef}
-                    src={AMBIENCE_FILE}
-                    loop
-                    playsInline
-                    preload="auto"
-                  />
-                )}
+                <audio
+                  ref={ambienceFileRef}
+                  src={AMBIENCE_FILE}
+                  loop
+                  playsInline
+                  preload="auto"
+                />
               </motion.div>
             )}
           </div>

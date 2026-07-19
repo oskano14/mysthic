@@ -1,16 +1,26 @@
 import { NextResponse } from "next/server";
 
-// Moteur vocal principal : Google Cloud TTS (voix française féminine).
-// Secours optionnel : ElevenLabs si une clé est fournie. Sinon 502 -> le
-// front bascule sur la voix système du navigateur.
+// Voix UNIQUE : Google Cloud TTS, voix française féminine.
+// (Aucun secours ElevenLabs — c'était la voix masculine d'origine.)
+// Si Google n'est pas configuré / échoue -> 502 -> le front bascule sur la voix
+// système du navigateur.
 
-// Voix féminines FR disponibles : fr-FR-Neural2-A / -C / -E, fr-FR-Wavenet-A / -C.
+// Voix féminines FR : fr-FR-Neural2-A / -C / -E, fr-FR-Wavenet-A / -C.
 const GOOGLE_VOICE = process.env.GOOGLE_TTS_VOICE || "fr-FR-Neural2-A";
 const GOOGLE_PITCH = parseFloat(process.env.GOOGLE_TTS_PITCH ?? "0");
 const GOOGLE_RATE = parseFloat(process.env.GOOGLE_TTS_RATE ?? "0.9");
 
+function escapeXml(s) {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 async function generateGoogleTTS(text, apiKey) {
-  // SSML avec marqueurs pour extraire le minutage mot-à-mot (surlignage karaoké).
+  // SSML avec marqueurs pour le minutage mot-à-mot (surlignage karaoké).
   const words = text.split(/(\s+)/);
   let ssml = "<speak>";
   let currentPos = 0;
@@ -78,46 +88,6 @@ async function generateGoogleTTS(text, apiKey) {
   };
 }
 
-async function generateElevenLabs(text, apiKey) {
-  const voiceId = process.env.ELEVENLABS_VOICE_ID || "XB0fDUnXU5pow0Jex86P";
-  const res = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/with-timestamps`,
-    {
-      method: "POST",
-      headers: {
-        "xi-api-key": apiKey,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        text: text.slice(0, 2500),
-        model_id: "eleven_multilingual_v2",
-        voice_settings: {
-          stability: 0.6,
-          similarity_boost: 0.9,
-          style: 0.0,
-          use_speaker_boost: true,
-        },
-      }),
-    }
-  );
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`ElevenLabs HTTP ${res.status}: ${err}`);
-  }
-  return await res.json();
-}
-
-function escapeXml(s) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
 export async function POST(request) {
   let body;
   try {
@@ -131,29 +101,17 @@ export async function POST(request) {
     return NextResponse.json({ error: "Le texte à lire est requis." }, { status: 400 });
   }
 
-  // 1) Google Cloud TTS (voix féminine) — moteur principal
   if (process.env.GOOGLE_TTS_API_KEY) {
     try {
       const data = await generateGoogleTTS(text, process.env.GOOGLE_TTS_API_KEY);
       return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
     } catch (err) {
-      console.error("Google TTS a échoué, tentative ElevenLabs:", err);
+      console.error("Google TTS a échoué:", err);
     }
   }
 
-  // 2) ElevenLabs (secours si clé fournie)
-  if (process.env.ELEVENLABS_API_KEY) {
-    try {
-      const data = await generateElevenLabs(text, process.env.ELEVENLABS_API_KEY);
-      return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
-    } catch (err) {
-      console.error("ElevenLabs a échoué:", err);
-    }
-  }
-
-  // 3) Aucun secours cloud -> voix système du navigateur (via 502)
   return NextResponse.json(
-    { error: "Aucune voix cloud configurée. Basculement sur la voix système." },
+    { error: "Voix Google non configurée. Basculement sur la voix système." },
     { status: 502 }
   );
 }
